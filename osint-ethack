@@ -1,0 +1,1148 @@
+#!/usr/bin/env bash
+# ============================================================
+#  osint-ethack — Offensive OSINT Toolkit
+#  Focus: Ethical Hacking | Zero-Day Intel | Exploit Tracking
+#  Supports: Kali Linux | Kali NetHunter | Termux (Android)
+#  Author: yosreased — github.com/yosreased/osint-ethack
+# ============================================================
+
+set -euo pipefail
+
+# ── Environment Auto-Detection ───────────────────────────────
+if [[ -n "${TERMUX_VERSION:-}" ]] || [[ -d "/data/data/com.termux" ]]; then
+  ENV="termux"
+  PKG_MGR="pkg"
+  SUDO=""
+  PIP_FLAGS=""                        # Termux pip doesn't need --break-system-packages
+  INSTALL_DIR="${HOME}/../usr/bin"    # Termux bin path
+  WORDLIST_DIR="${HOME}/wordlists"
+else
+  ENV="kali"
+  PKG_MGR="apt"
+  SUDO="sudo"
+  PIP_FLAGS="--break-system-packages"
+  INSTALL_DIR="/usr/local/bin"
+  WORDLIST_DIR="/usr/share/wordlists"
+fi
+
+# ── Paths ────────────────────────────────────────────────────
+TOOL_DIR="${HOME}/.osint-ethack"
+TOOLS_DIR="${TOOL_DIR}/tools"
+LOGS_DIR="${TOOL_DIR}/logs"
+WORKDIR="${HOME}/osint-results"
+CONF="${TOOL_DIR}/config.env"
+VERSION="2.2.0"
+
+# ── Colors ───────────────────────────────────────────────────
+R='\033[0;31m'  G='\033[0;32m'  Y='\033[1;33m'
+B='\033[0;34m'  C='\033[0;36m'  M='\033[0;35m'
+W='\033[1;37m'  DIM='\033[2m'   BOLD='\033[1m'
+NC='\033[0m'
+
+# ── Banner ───────────────────────────────────────────────────
+banner() {
+  clear
+  echo -e "${R}"
+  cat << 'EOF'
+  ██████╗ ███████╗██╗███╗   ██╗████████╗    ███████╗████████╗██╗  ██╗ █████╗  ██████╗██╗  ██╗
+ ██╔═══██╗██╔════╝██║████╗  ██║╚══██╔══╝    ██╔════╝╚══██╔══╝██║  ██║██╔══██╗██╔════╝██║ ██╔╝
+ ██║   ██║███████╗██║██╔██╗ ██║   ██║       █████╗     ██║   ███████║███████║██║     █████╔╝ 
+ ██║   ██║╚════██║██║██║╚██╗██║   ██║       ██╔══╝     ██║   ██╔══██║██╔══██║██║     ██╔═██╗ 
+ ╚██████╔╝███████║██║██║ ╚████║   ██║       ███████╗   ██║   ██║  ██║██║  ██║╚██████╗██║  ██╗
+  ╚═════╝ ╚══════╝╚═╝╚═╝  ╚═══╝   ╚═╝       ╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝
+EOF
+  echo -e "${NC}"
+    if [[ "$ENV" == "termux" ]]; then
+    echo -e "  ${DIM}Offensive OSINT Toolkit — ${G}Termux Edition${NC}  ${Y}v${VERSION}${NC}"
+  else
+    echo -e "  ${DIM}Offensive OSINT Toolkit — ${C}Kali NetHunter${NC}  ${Y}v${VERSION}${NC}"
+  fi
+  echo -e "  ${DIM}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+  echo
+}
+
+# ── Helpers ──────────────────────────────────────────────────
+info()    { echo -e "  ${C}[*]${NC} $*"; }
+ok()      { echo -e "  ${G}[✓]${NC} $*"; }
+warn()    { echo -e "  ${Y}[!]${NC} $*"; }
+err()     { echo -e "  ${R}[✗]${NC} $*"; }
+section() { echo -e "\n  ${BOLD}${M}── $* ──${NC}\n"; }
+
+require() {
+  command -v "$1" &>/dev/null || {
+    [[ "$ENV" == "termux" ]]       && err "Required: $1 — install with: pkg install $1"       || err "Required: $1 — install with: apt install $1"
+    return 1
+  }
+}
+
+# Termux-safe package install
+pkg_install() {
+  if [[ "$ENV" == "termux" ]]; then
+    pkg install -y "$@" 2>&1 | grep -v "^$" || true
+  else
+    $SUDO apt install -y "$@" -qq 2>&1 | tail -1 || true
+  fi
+}
+
+# Termux-safe pip install
+pip_install() {
+  pip3 install "$@" $PIP_FLAGS -q
+}
+
+pause() { echo; read -rp "  ${DIM}Press Enter to continue...${NC} "; }
+
+timestamp() { date '+%Y-%m-%d_%H-%M-%S'; }
+
+log_result() {
+  local category="$1" content="$2"
+  local logfile="${LOGS_DIR}/${category}_$(timestamp).txt"
+  echo "$content" | tee -a "$logfile"
+  ok "Saved → ${logfile}"
+}
+
+# ── Init dirs ────────────────────────────────────────────────
+init_dirs() {
+  mkdir -p "${TOOL_DIR}" "${TOOLS_DIR}" "${LOGS_DIR}" "${WORKDIR}"
+  [[ -f "$CONF" ]] || cat > "$CONF" << 'CONF'
+# osint-ethack config
+SHODAN_API_KEY=""
+VT_API_KEY=""
+NVD_FEEDS_DAYS=7
+DEFAULT_TARGET=""
+CONF
+}
+
+load_config() {
+  [[ -f "$CONF" ]] && source "$CONF"
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 1 — TARGET RECON (Passive)
+# ═══════════════════════════════════════════════════════════════
+module_passive_recon() {
+  banner
+  section "PASSIVE RECON"
+  echo -e "  ${W}Target:${NC} "
+  read -rp "  Enter domain/IP/company: " TARGET
+  [[ -z "$TARGET" ]] && { warn "No target given."; return; }
+
+  local outdir="${WORKDIR}/recon_${TARGET}_$(timestamp)"
+  mkdir -p "$outdir"
+
+  echo
+  echo -e "  ${Y}Select tool:${NC}"
+  local tools=(
+    "theHarvester   — emails, subdomains, IPs from public sources"
+    "amass          — subdomain enumeration & attack surface mapping"
+    "subfinder      — fast passive subdomain discovery"
+    "dnsx           — DNS resolution & record bruteforce"
+    "whois          — domain registration info"
+    "Shodan CLI     — internet-connected device search"
+    "crt.sh         — certificate transparency subdomains"
+    "Google Dorks   — advanced Google search strings"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-9]: '
+  select opt in "${tools[@]}"; do
+    case $REPLY in
+      1) _run_theharvester "$TARGET" "$outdir" ;;
+      2) _run_amass "$TARGET" "$outdir" ;;
+      3) _run_subfinder "$TARGET" "$outdir" ;;
+      4) _run_dnsx "$TARGET" "$outdir" ;;
+      5) _run_whois "$TARGET" "$outdir" ;;
+      6) _run_shodan "$TARGET" "$outdir" ;;
+      7) _run_crtsh "$TARGET" "$outdir" ;;
+      8) _google_dorks "$TARGET" ;;
+      9) return ;;
+    esac
+    break
+  done
+}
+
+_run_theharvester() {
+  require theHarvester || return
+  info "Running theHarvester on $1 ..."
+  theHarvester -d "$1" -b all -f "${2}/theharvester_$1" 2>&1 | tee "${2}/theharvester_raw.txt"
+  ok "Done. Results in ${2}/"
+}
+
+_run_amass() {
+  require amass || return
+  info "Running amass passive on $1 ..."
+  amass enum -passive -d "$1" -o "${2}/amass_${1}.txt" 2>&1 | tee -a "${2}/amass_raw.txt"
+  ok "Done. Results in ${2}/amass_${1}.txt"
+}
+
+_run_subfinder() {
+  require subfinder || return
+  info "Running subfinder on $1 ..."
+  subfinder -d "$1" -o "${2}/subfinder_${1}.txt" -silent 2>&1 | tee -a "${2}/subfinder_raw.txt"
+  ok "Done."
+}
+
+_run_dnsx() {
+  require dnsx || return
+  local wordlist="${WORDLIST_DIR}/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+  [[ ! -f "$wordlist" ]] && wordlist="${WORDLIST_DIR}/dns.txt"
+  info "Running dnsx on $1 ..."
+  dnsx -d "$1" -w "$wordlist" -o "${2}/dnsx_${1}.txt" 2>&1 | tee -a "${2}/dnsx_raw.txt"
+  ok "Done."
+}
+
+_run_whois() {
+  require whois || return
+  info "WHOIS lookup for $1 ..."
+  whois "$1" | tee "${2}/whois_${1}.txt"
+  ok "Saved to ${2}/whois_${1}.txt"
+}
+
+_run_shodan() {
+  require shodan || { warn "Install: pip3 install shodan"; return; }
+  load_config
+  if [[ -z "${SHODAN_API_KEY:-}" ]]; then
+    warn "No Shodan API key set. Run: osint-ethack config"
+    return
+  fi
+  shodan init "$SHODAN_API_KEY" &>/dev/null
+  info "Shodan search for $1 ..."
+  shodan host "$1" 2>&1 | tee "${2}/shodan_${1}.txt"
+}
+
+_run_crtsh() {
+  require curl || return
+  require jq   || return
+  info "Querying crt.sh for $1 ..."
+  curl -s "https://crt.sh/?q=%25.$1&output=json" \
+    | jq -r '.[].name_value' \
+    | sort -u \
+    | tee "${2}/crtsh_${1}.txt"
+  ok "Done."
+}
+
+_google_dorks() {
+  local t="$1"
+  banner
+  section "GOOGLE DORKS — ${t}"
+  cat << EOF
+  ${Y}Copy-paste these into Google:${NC}
+
+  ${C}[Site recon]${NC}
+  site:${t}
+  site:${t} filetype:pdf
+  site:${t} filetype:xls OR filetype:xlsx OR filetype:csv
+  site:${t} inurl:admin
+  site:${t} inurl:login
+  site:${t} inurl:config
+  site:${t} inurl:backup
+  site:${t} intitle:"index of"
+
+  ${C}[Sensitive files]${NC}
+  site:${t} ext:log
+  site:${t} ext:bak OR ext:old OR ext:swp
+  site:${t} ext:env OR ext:ini
+  site:${t} "password" filetype:txt
+
+  ${C}[Exposed panels]${NC}
+  site:${t} intext:"phpMyAdmin" intitle:"phpMyAdmin"
+  site:${t} intitle:"Dashboard" inurl:admin
+  site:${t} intitle:"Kibana" OR intitle:"Grafana"
+  site:${t} intitle:"Jenkins"
+
+  ${C}[API & keys]${NC}
+  site:${t} "api_key" OR "api_secret" OR "access_token"
+  site:${t} inurl:api/v1 OR inurl:api/v2
+  site:github.com "${t}" password OR token OR secret
+EOF
+  pause
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 2 — EXPLOIT & ZERO-DAY INTEL
+# ═══════════════════════════════════════════════════════════════
+module_exploit_intel() {
+  banner
+  section "EXPLOIT & ZERO-DAY INTEL"
+  echo -e "  ${Y}Select source:${NC}"
+  local opts=(
+    "CVE NVD Feed        — latest CVEs from NIST (offline JSON)"
+    "ExploitDB search    — searchsploit local + online"
+    "Metasploit modules  — search MSF for exploits"
+    "PoC-in-GitHub       — find CVE PoCs on GitHub"
+    "Vulners CLI         — vuln scanner & CVE lookup"
+    "PacketStorm feed    — latest advisories (curl)"
+    "CISA KEV feed       — known exploited vulnerabilities"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-8]: '
+  select opt in "${opts[@]}"; do
+    case $REPLY in
+      1) _nvd_feed ;;
+      2) _exploitdb ;;
+      3) _msf_search ;;
+      4) _poc_github ;;
+      5) _vulners ;;
+      6) _packetstorm ;;
+      7) _cisa_kev ;;
+      8) return ;;
+    esac
+    break
+  done
+}
+
+_nvd_feed() {
+  require curl || return
+  require jq   || return
+  local days="${NVD_FEEDS_DAYS:-7}"
+  local end_date start_date
+  end_date=$(date -u '+%Y-%m-%dT%H:%M:%S.000')
+  start_date=$(date -u -d "${days} days ago" '+%Y-%m-%dT%H:%M:%S.000' 2>/dev/null \
+    || date -u -v-"${days}"d '+%Y-%m-%dT%H:%M:%S.000')
+
+  info "Fetching NVD CVEs from last ${days} days..."
+  local url="https://services.nvd.nist.gov/rest/json/cves/2.0?pubStartDate=${start_date}&pubEndDate=${end_date}&resultsPerPage=20"
+  
+  curl -s "$url" | jq -r '
+    .vulnerabilities[] |
+    "\(.cve.id)  CVSS:\(.cve.metrics.cvssMetricV31[0].cvssData.baseScore // .cve.metrics.cvssMetricV2[0].cvssData.baseScore // "N/A")  \(.cve.descriptions[0].value[:80])"
+  ' 2>/dev/null | sort -t: -k2 -rn | head -30 | tee "${LOGS_DIR}/nvd_$(timestamp).txt"
+
+  echo
+  read -rp "  ${C}Search specific CVE ID (e.g. CVE-2024-1234) or Enter to skip: ${NC}" cveid
+  if [[ -n "$cveid" ]]; then
+    curl -s "https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=${cveid}" \
+      | jq -r '.vulnerabilities[0] | 
+        "ID: \(.cve.id)\nPublished: \(.cve.published)\nScore: \(.cve.metrics.cvssMetricV31[0].cvssData.baseScore // "N/A")\nSeverity: \(.cve.metrics.cvssMetricV31[0].cvssData.baseSeverity // "N/A")\nDesc: \(.cve.descriptions[0].value)\nRefs:\n\(.cve.references[].url)"
+      ' 2>/dev/null | tee "${LOGS_DIR}/${cveid}_$(timestamp).txt"
+  fi
+  pause
+}
+
+_exploitdb() {
+  require searchsploit || { warn "Install: apt install exploitdb"; return; }
+  read -rp "  ${C}Search term (e.g. 'apache 2.4 rce'): ${NC}" term
+  [[ -z "$term" ]] && return
+  info "Searching ExploitDB..."
+  searchsploit "$term" | tee "${LOGS_DIR}/edb_$(timestamp).txt"
+  echo
+  read -rp "  ${C}View full exploit? Enter EDB-ID or Enter to skip: ${NC}" edbid
+  [[ -n "$edbid" ]] && searchsploit -x "$edbid"
+  pause
+}
+
+_msf_search() {
+  require msfconsole || { warn "Metasploit not found."; return; }
+  read -rp "  ${C}Search term (e.g. 'eternalblue'): ${NC}" term
+  [[ -z "$term" ]] && return
+  info "Searching Metasploit modules..."
+  msfconsole -q -x "search $term; exit" 2>/dev/null | tee "${LOGS_DIR}/msf_$(timestamp).txt"
+  pause
+}
+
+_poc_github() {
+  require curl || return
+  require jq   || return
+  read -rp "  ${C}Enter CVE ID (e.g. CVE-2024-1234): ${NC}" cveid
+  [[ -z "$cveid" ]] && return
+  info "Searching GitHub for PoCs: ${cveid}..."
+  curl -s "https://api.github.com/search/repositories?q=${cveid}+PoC&sort=updated&per_page=10" \
+    | jq -r '.items[] | "\(.full_name)  ★\(.stargazers_count)  \(.html_url)"' \
+    | tee "${LOGS_DIR}/poc_${cveid}_$(timestamp).txt"
+  
+  echo
+  info "Also checking: https://github.com/trickest/cve (CVE PoC repo)"
+  info "And: https://github.com/nomi-sec/PoC-in-GitHub"
+  pause
+}
+
+_vulners() {
+  require curl || return
+  require jq   || return
+  read -rp "  ${C}Software + version (e.g. 'Apache 2.4.50'): ${NC}" sw
+  [[ -z "$sw" ]] && return
+  info "Querying Vulners API..."
+  curl -s "https://vulners.com/api/v3/search/lucene/?query=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$sw")&size=10" \
+    | jq -r '.data.search[] | "\(.cvss.score // "N/A")  \(._id)  \(.title)"' 2>/dev/null \
+    | sort -rn \
+    | tee "${LOGS_DIR}/vulners_$(timestamp).txt"
+  pause
+}
+
+_packetstorm() {
+  require curl || return
+  info "Fetching PacketStorm latest advisories..."
+  curl -s "https://packetstormsecurity.com/feeds/news" \
+    | grep -oP '(?<=<title>)[^<]+' \
+    | head -20 \
+    | nl \
+    | tee "${LOGS_DIR}/packetstorm_$(timestamp).txt"
+  pause
+}
+
+_cisa_kev() {
+  require curl || return
+  require jq   || return
+  info "Fetching CISA Known Exploited Vulnerabilities catalog..."
+  curl -s "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json" \
+    | jq -r '.vulnerabilities | sort_by(.dateAdded) | reverse | .[0:25][] |
+      "\(.dateAdded)  \(.cveID)  [\(.product)]  \(.shortDescription[:60])"' \
+    | tee "${LOGS_DIR}/cisa_kev_$(timestamp).txt"
+  echo
+  ok "Full catalog: https://www.cisa.gov/known-exploited-vulnerabilities-catalog"
+  pause
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 3 — NETWORK & HOST INTEL
+# ═══════════════════════════════════════════════════════════════
+module_network_intel() {
+  banner
+  section "NETWORK & HOST INTEL"
+  read -rp "  ${C}Target IP/range (e.g. 192.168.1.0/24 or 1.2.3.4): ${NC}" TARGET
+  [[ -z "$TARGET" ]] && return
+
+  local outdir="${WORKDIR}/net_${TARGET//\//_}_$(timestamp)"
+  mkdir -p "$outdir"
+
+  echo -e "\n  ${Y}Select scan:${NC}"
+  local opts=(
+    "nmap — quick host discovery"
+    "nmap — full port + version + scripts"
+    "nmap — vuln scripts (--script vuln)"
+    "nmap — stealth SYN scan"
+    "masscan — fast all-ports"
+    "netdiscover — ARP local scan"
+    "traceroute + ASN lookup"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-8]: '
+  select opt in "${opts[@]}"; do
+    case $REPLY in
+      1) nmap -sn "$TARGET" -oN "${outdir}/discover.txt" | tee /dev/tty ;;
+      2) nmap -sV -sC -p- --open "$TARGET" -oN "${outdir}/full.txt" | tee /dev/tty ;;
+      3) nmap --script vuln "$TARGET" -oN "${outdir}/vuln.txt" | tee /dev/tty ;;
+      4) nmap -sS -Pn -T4 "$TARGET" -oN "${outdir}/stealth.txt" | tee /dev/tty ;;
+      5) _masscan "$TARGET" "$outdir" ;;
+      6) _netdiscover "$TARGET" "$outdir" ;;
+      7) _traceroute_asn "$TARGET" "$outdir" ;;
+      8) return ;;
+    esac
+    ok "Results saved → ${outdir}/"
+    break
+  done
+  pause
+}
+
+_masscan() {
+  require masscan || { warn "Install: apt install masscan"; return; }
+  info "masscan on $1 (all ports, rate 1000)..."
+  masscan "$1" -p1-65535 --rate=1000 -oL "${2}/masscan.txt"
+}
+
+_netdiscover() {
+  require netdiscover || { warn "Install: apt install netdiscover"; return; }
+  info "ARP scan..."
+  netdiscover -r "$1" -P | tee "${2}/netdiscover.txt"
+}
+
+_traceroute_asn() {
+  require traceroute || return
+  require curl || return
+  info "Traceroute to $1..."
+  traceroute "$1" | tee "${2}/traceroute.txt"
+  info "ASN lookup..."
+  curl -s "https://ipinfo.io/${1}/org" | tee -a "${2}/traceroute.txt"
+  echo
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 4 — PEOPLE & IDENTITY OSINT
+# ═══════════════════════════════════════════════════════════════
+module_people_osint() {
+  banner
+  section "PEOPLE & IDENTITY OSINT"
+  echo -e "  ${Y}Select tool:${NC}"
+  local opts=(
+    "sherlock       — username across 400+ sites"
+    "holehe         — email → registered accounts"
+    "maigret        — username profiling (300+ sites)"
+    "socialscan     — username/email availability"
+    "phoneinfoga    — phone number OSINT"
+    "h8mail         — email breach lookup"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-7]: '
+  select opt in "${opts[@]}"; do
+    case $REPLY in
+      1) _sherlock ;;
+      2) _holehe ;;
+      3) _maigret ;;
+      4) _socialscan ;;
+      5) _phoneinfoga ;;
+      6) _h8mail ;;
+      7) return ;;
+    esac
+    break
+  done
+}
+
+_sherlock() {
+  if command -v sherlock &>/dev/null; then
+    read -rp "  ${C}Username: ${NC}" u
+    sherlock "$u" --output "${LOGS_DIR}/sherlock_${u}_$(timestamp).txt" | tee /dev/tty
+  elif [[ -d "${TOOLS_DIR}/sherlock" ]]; then
+    read -rp "  ${C}Username: ${NC}" u
+    python3 "${TOOLS_DIR}/sherlock/sherlock/sherlock.py" "$u" \
+      --output "${LOGS_DIR}/sherlock_${u}_$(timestamp).txt" | tee /dev/tty
+  else
+    warn "Sherlock not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+_holehe() {
+  require holehe || { warn "Install: pip3 install holehe --break-system-packages"; return; }
+  read -rp "  ${C}Email: ${NC}" email
+  holehe "$email" | tee "${LOGS_DIR}/holehe_$(timestamp).txt"
+  pause
+}
+
+_maigret() {
+  if command -v maigret &>/dev/null || [[ -d "${TOOLS_DIR}/maigret" ]]; then
+    read -rp "  ${C}Username: ${NC}" u
+    if command -v maigret &>/dev/null; then
+      maigret "$u" --folderoutput "${LOGS_DIR}/maigret_${u}_$(timestamp)"
+    else
+      python3 "${TOOLS_DIR}/maigret/maigret.py" "$u" \
+        --folderoutput "${LOGS_DIR}/maigret_${u}_$(timestamp)"
+    fi
+  else
+    warn "Maigret not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+_socialscan() {
+  require socialscan || { warn "Install: pip3 install socialscan --break-system-packages"; return; }
+  read -rp "  ${C}Username or email: ${NC}" u
+  socialscan "$u" | tee "${LOGS_DIR}/socialscan_$(timestamp).txt"
+  pause
+}
+
+_phoneinfoga() {
+  if command -v phoneinfoga &>/dev/null || [[ -d "${TOOLS_DIR}/phoneinfoga" ]]; then
+    read -rp "  ${C}Phone (E.164 format e.g. +201234567890): ${NC}" phone
+    if command -v phoneinfoga &>/dev/null; then
+      phoneinfoga scan -n "$phone" | tee "${LOGS_DIR}/phone_$(timestamp).txt"
+    else
+      "${TOOLS_DIR}/phoneinfoga/phoneinfoga" scan -n "$phone" | tee "${LOGS_DIR}/phone_$(timestamp).txt"
+    fi
+  else
+    warn "PhoneInfoga not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+_h8mail() {
+  require h8mail || { warn "Install: pip3 install h8mail --break-system-packages"; return; }
+  read -rp "  ${C}Email to check for breaches: ${NC}" email
+  h8mail -t "$email" | tee "${LOGS_DIR}/h8mail_$(timestamp).txt"
+  pause
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 5 — WEB APP RECON
+# ═══════════════════════════════════════════════════════════════
+module_webapp_recon() {
+  banner
+  section "WEB APP RECON"
+  read -rp "  ${C}Target URL (e.g. https://target.com): ${NC}" URL
+  [[ -z "$URL" ]] && return
+
+  local host
+  host=$(echo "$URL" | awk -F/ '{print $3}')
+  local outdir="${WORKDIR}/webapp_${host}_$(timestamp)"
+  mkdir -p "$outdir"
+
+  echo -e "\n  ${Y}Select tool:${NC}"
+  local opts=(
+    "whatweb        — technology fingerprinting"
+    "wafw00f        — WAF detection"
+    "nikto          — web server vulnerability scan"
+    "gobuster       — directory/file bruteforce"
+    "ffuf           — fast web fuzzer"
+    "nuclei         — template-based vuln scanner"
+    "wpscan         — WordPress scanner"
+    "sqlmap         — SQL injection"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-9]: '
+  select opt in "${opts[@]}"; do
+    case $REPLY in
+      1) require whatweb   && whatweb "$URL" -v | tee "${outdir}/whatweb.txt" ;;
+      2) require wafw00f   && wafw00f "$URL" | tee "${outdir}/waf.txt" ;;
+      3) require nikto     && nikto -h "$URL" -o "${outdir}/nikto.txt" ;;
+      4) _gobuster "$URL" "$outdir" ;;
+      5) _ffuf "$URL" "$outdir" ;;
+      6) _nuclei "$URL" "$outdir" ;;
+      7) require wpscan    && wpscan --url "$URL" --enumerate ap,at,u | tee "${outdir}/wpscan.txt" ;;
+      8) require sqlmap    && sqlmap -u "$URL" --batch --level=3 | tee "${outdir}/sqlmap.txt" ;;
+      9) return ;;
+    esac
+    ok "Saved → ${outdir}/"
+    break
+  done
+  pause
+}
+
+_gobuster() {
+  require gobuster || { warn "Install: apt install gobuster"; return; }
+  local wl="${WORDLIST_DIR}/dirb/common.txt"
+  [[ ! -f "$wl" ]] && wl="${WORDLIST_DIR}/seclists/Discovery/Web-Content/common.txt"
+  gobuster dir -u "$1" -w "$wl" -o "${2}/gobuster.txt" -q | tee /dev/tty
+}
+
+_ffuf() {
+  require ffuf || { warn "Install: apt install ffuf"; return; }
+  local wl="${WORDLIST_DIR}/dirb/common.txt"
+  ffuf -u "${1}/FUZZ" -w "$wl" -o "${2}/ffuf.json" -of json -mc 200,301,302,403 | tee /dev/tty
+}
+
+_nuclei() {
+  if command -v nuclei &>/dev/null; then
+    info "Running nuclei on $1 (critical+high+medium)..."
+    nuclei -u "$1" -severity critical,high,medium -o "${2}/nuclei.txt" | tee /dev/tty
+  else
+    warn "Nuclei not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 6 — DARK WEB & LEAK MONITORING
+# ═══════════════════════════════════════════════════════════════
+module_darkweb_leaks() {
+  banner
+  section "DARK WEB & LEAK INTEL"
+  echo -e "  ${Y}Select source:${NC}"
+  local opts=(
+    "Have I Been Pwned  — breach check via API"
+    "IntelX CLI         — breach & dark web search"
+    "Tor onion check    — route through Tor"
+    "Paste sites scan   — Pastebin/Hastebin dork"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-5]: '
+  select opt in "${opts[@]}"; do
+    case $REPLY in
+      1) _hibp ;;
+      2) _intelx ;;
+      3) _tor_check ;;
+      4) _paste_dork ;;
+      5) return ;;
+    esac
+    break
+  done
+}
+
+_hibp() {
+  require curl || return
+  read -rp "  ${C}Email to check: ${NC}" email
+  local encoded
+  encoded=$(python3 -c "import urllib.parse,sys; print(urllib.parse.quote(sys.argv[1]))" "$email")
+  info "Querying HIBP..."
+  result=$(curl -s -H "hibp-api-key: ${HIBP_API_KEY:-public}" \
+    "https://haveibeenpwned.com/api/v3/breachedaccount/${encoded}?truncateResponse=false" \
+    -H "User-Agent: osint-ethack" 2>&1)
+  if echo "$result" | python3 -m json.tool &>/dev/null; then
+    echo "$result" | python3 -m json.tool | tee "${LOGS_DIR}/hibp_$(timestamp).txt"
+  else
+    warn "No breach found or API key needed: https://haveibeenpwned.com/API/Key"
+  fi
+  pause
+}
+
+_intelx() {
+  if command -v intelx &>/dev/null || [[ -d "${TOOLS_DIR}/intelx" ]]; then
+    read -rp "  ${C}Search term (email/domain/IP): ${NC}" term
+    if [[ -d "${TOOLS_DIR}/intelx" ]]; then
+      python3 "${TOOLS_DIR}/intelx/intelx.py" -search "$term" | tee "${LOGS_DIR}/intelx_$(timestamp).txt"
+    else
+      intelx -search "$term" | tee "${LOGS_DIR}/intelx_$(timestamp).txt"
+    fi
+  else
+    warn "IntelX CLI not installed. Run: osint-ethack install"
+    info "Alternatively: https://intelx.io (free tier available)"
+  fi
+  pause
+}
+
+_tor_check() {
+  require tor || { warn "Install: apt install tor"; return; }
+  require curl || return
+  info "Starting Tor..."
+  service tor start 2>/dev/null || tor &
+  sleep 3
+  info "Checking Tor circuit..."
+  curl -s --socks5-hostname 127.0.0.1:9050 https://check.torproject.org/api/ip | python3 -m json.tool
+  echo
+  info "Use: curl --socks5-hostname 127.0.0.1:9050 <.onion_url>"
+  info "Or proxychains with tor for tool routing"
+  pause
+}
+
+_paste_dork() {
+  read -rp "  ${C}Search term (domain/email/keyword): ${NC}" term
+  echo
+  echo -e "  ${Y}Google dorks for paste sites:${NC}"
+  echo
+  echo "  site:pastebin.com \"${term}\""
+  echo "  site:paste.ee \"${term}\""
+  echo "  site:hastebin.com \"${term}\""
+  echo "  site:ghostbin.co \"${term}\""
+  echo "  site:dpaste.com \"${term}\""
+  echo "  site:ideone.com \"${term}\""
+  echo "  \"${term}\" site:pastebin.com OR site:paste.ee"
+  echo
+  info "Run in browser. For automation: install pastehunter"
+  pause
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 7 — WIRELESS & BT OSINT
+# ═══════════════════════════════════════════════════════════════
+module_wireless() {
+  banner
+  section "WIRELESS & BLUETOOTH OSINT"
+  echo -e "  ${Y}Select:${NC}"
+  local opts=(
+    "WiFi scan         — list APs (iw/iwlist)"
+    "hcxdumptool       — PMKID/EAPOL capture (wlan1)"
+    "WiGLE lookup      — AP geolocation via WiGLE"
+    "Bluetooth scan    — hciconfig + hcitool"
+    "Blue Hydra        — BT device profiling"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-6]: '
+  select opt in "${opts[@]}"; do
+    case $REPLY in
+      1) _wifi_scan ;;
+      2) _hcxdumptool ;;
+      3) _wigle ;;
+      4) _bt_scan ;;
+      5) _blue_hydra ;;
+      6) return ;;
+    esac
+    break
+  done
+}
+
+_wifi_scan() {
+  local iface="${1:-wlan0}"
+  info "Scanning with ${iface}..."
+  iw dev "$iface" scan 2>/dev/null | grep -E "SSID:|signal:|addr" | tee "${LOGS_DIR}/wifi_$(timestamp).txt" \
+    || iwlist "$iface" scan 2>/dev/null | grep -E "ESSID:|Signal|Address" | tee "${LOGS_DIR}/wifi_$(timestamp).txt"
+  pause
+}
+
+_hcxdumptool() {
+  if [[ "$ENV" == "termux" ]]; then
+    warn "hcxdumptool requires Kali NetHunter chroot with wlan1 adapter"
+    warn "Switch to NetHunter chroot for wireless capture"
+    pause; return
+  fi
+  require hcxdumptool || { warn "Install: apt install hcxdumptool"; return; }
+  info "Using wlan1 (external USB adapter) for capture"
+  local cap="${WORKDIR}/pmkid_$(timestamp).pcapng"
+  info "Capturing PMKID/EAPOL on wlan1 for 60s..."
+  warn "This puts wlan1 in monitor mode"
+  hcxdumptool -i wlan1 -o "$cap" --enable_status=1 &
+  sleep 60
+  kill %1 2>/dev/null
+  ok "Saved → ${cap}"
+  info "Convert with: hcxpcapngtool -o hash.hc22000 ${cap}"
+  info "Then crack: hashcat -m 22000 hash.hc22000 wordlist.txt"
+  pause
+}
+
+_wigle() {
+  require curl || return
+  read -rp "  ${C}SSID to search: ${NC}" ssid
+  info "WiGLE requires API auth. Opening search..."
+  info "URL: https://api.wigle.net/api/v2/network/search?ssid=${ssid}"
+  info "Register free at wigle.net for API key"
+  pause
+}
+
+_bt_scan() {
+  require hciconfig || return
+  hciconfig hci0 up 2>/dev/null
+  info "Scanning Bluetooth devices (10s)..."
+  hcitool scan | tee "${LOGS_DIR}/bt_$(timestamp).txt"
+  info "LE scan..."
+  hcitool lescan --passive 2>/dev/null &
+  sleep 5
+  kill %1 2>/dev/null
+  pause
+}
+
+_blue_hydra() {
+  if [[ -d "${TOOLS_DIR}/blue_hydra" ]]; then
+    info "Starting Blue Hydra (requires hci0 up)..."
+    hciconfig hci0 up 2>/dev/null
+    cd "${TOOLS_DIR}/blue_hydra" && bundle exec ruby bin/blue_hydra
+  else
+    warn "Blue Hydra not installed in ${TOOLS_DIR}/blue_hydra"
+    warn "Clone: git clone https://github.com/expliot-framework/blue_hydra ${TOOLS_DIR}/blue_hydra"
+  fi
+  pause
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 8 — UPDATER
+# ═══════════════════════════════════════════════════════════════
+module_update() {
+  banner
+  section "UPDATE ALL TOOLS"
+  echo -e "  ${Y}What to update:${NC}"
+  local opts=(
+    "Update apt tools (nmap, amass, subfinder...)"
+    "Update pip tools (holehe, h8mail, socialscan...)"
+    "Update git tools (sherlock, maigret, nuclei templates...)"
+    "Update ALL"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-5]: '
+  select opt in "${opts[@]}"; do
+    case $REPLY in
+      1) _update_apt ;;
+      2) _update_pip ;;
+      3) _update_git ;;
+      4) _update_apt; _update_pip; _update_git ;;
+      5) return ;;
+    esac
+    break
+  done
+}
+
+_update_apt() {
+  section "Updating APT tools"
+  local pkgs=(
+    nmap masscan gobuster ffuf nikto amass
+    whatweb wafw00f wpscan sqlmap theHarvester
+    hcxdumptool netdiscover exploitdb
+    tor proxychains4 jq curl python3-pip
+  )
+  apt update -qq
+  for pkg in "${pkgs[@]}"; do
+    if dpkg -l "$pkg" &>/dev/null; then
+      info "Upgrading ${pkg}..."
+      apt install --only-upgrade -y "$pkg" -qq 2>&1 | grep -v "^$" || true
+      ok "${pkg} up to date"
+    fi
+  done
+}
+
+_update_pip() {
+  section "Updating pip tools"
+  local pips=(holehe h8mail socialscan shodan maigret phoneinfoga vulners)
+  for p in "${pips[@]}"; do
+    if pip3 show "$p" &>/dev/null; then
+      info "Upgrading ${p}..."
+      pip_install --upgrade "$p" && ok "${p} updated"
+    fi
+  done
+}
+
+_update_git() {
+  section "Updating git-cloned tools"
+  local repos=(
+    "sherlock"
+    "maigret"
+    "nuclei-templates"
+    "intelx"
+    "phoneinfoga"
+    "subfinder"
+  )
+  for repo in "${repos[@]}"; do
+    local rpath="${TOOLS_DIR}/${repo}"
+    if [[ -d "${rpath}/.git" ]]; then
+      info "Updating ${repo}..."
+      git -C "$rpath" pull --rebase --autostash -q && ok "${repo} updated"
+    fi
+  done
+
+  # Update nuclei templates specifically
+  if command -v nuclei &>/dev/null; then
+    info "Updating nuclei templates..."
+    nuclei -update-templates -silent && ok "Nuclei templates updated"
+  fi
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 9 — INSTALLER
+# ═══════════════════════════════════════════════════════════════
+module_install() {
+  banner
+  section "INSTALL TOOLS"
+  warn "This clones repos only — no auto-run of third-party install scripts"
+  echo
+  echo -e "  ${Y}Select package group:${NC}"
+  local opts=(
+    "Core apt tools    (nmap, amass, gobuster, ffuf, nuclei...)"
+    "pip tools         (holehe, h8mail, socialscan, shodan, maigret)"
+    "Sherlock          (username OSINT)"
+    "Nuclei + templates (vulnerability scanner)"
+    "Subfinder         (subdomain discovery)"
+    "PhoneInfoga       (phone OSINT)"
+    "IntelX CLI        (breach/dark web search)"
+    "Install ALL"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-9]: '
+  select opt in "${opts[@]}"; do
+    case $REPLY in
+      1) _install_apt ;;
+      2) _install_pip ;;
+      3) _install_sherlock ;;
+      4) _install_nuclei ;;
+      5) _install_subfinder ;;
+      6) _install_phoneinfoga ;;
+      7) _install_intelx ;;
+      8) _install_apt; _install_pip; _install_sherlock; _install_nuclei; _install_subfinder; _install_phoneinfoga; _install_intelx ;;
+      9) return ;;
+    esac
+    break
+  done
+  pause
+}
+
+_install_apt() {
+  if [[ "$ENV" == "termux" ]]; then
+    section "Installing Termux packages"
+    pkg update -y -q
+    local pkgs=(
+      nmap curl git python3 pip ruby
+      jq wget whois traceroute
+      golang termux-tools openssh
+    )
+    for pkg in "${pkgs[@]}"; do
+      info "Installing ${pkg}..."
+      pkg install -y "$pkg" 2>&1 | tail -1 || warn "${pkg} not available"
+    done
+    ok "Termux packages done"
+    warn "Note: masscan/gobuster/sqlmap not in Termux — use pip or go alternatives"
+  else
+    section "Installing APT tools"
+    $SUDO apt update -qq
+    local pkgs=(
+      nmap masscan gobuster ffuf nikto amass
+      whatweb wafw00f wpscan sqlmap
+      hcxdumptool hcxtools netdiscover
+      exploitdb tor proxychains4
+      jq curl git python3-pip ruby bundler
+      traceroute whois dnsx
+    )
+    for pkg in "${pkgs[@]}"; do
+      info "Installing ${pkg}..."
+      $SUDO apt install -y "$pkg" -qq 2>&1 | tail -1 || warn "${pkg} failed"
+    done
+    ok "APT tools done"
+  fi
+}
+
+_install_pip() {
+  section "Installing pip tools"
+  pip_install holehe h8mail socialscan shodan maigret vulners
+  ok "pip tools done"
+}
+
+_install_sherlock() {
+  local dest="${TOOLS_DIR}/sherlock"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Sherlock..."
+    git clone --depth=1 https://github.com/sherlock-project/sherlock "$dest"
+    pip_install -r "${dest}/requirements.txt"
+    ok "Sherlock cloned → ${dest}"
+  else
+    ok "Sherlock already present. Run update to refresh."
+  fi
+}
+
+_install_nuclei() {
+  if ! command -v nuclei &>/dev/null; then
+    info "Installing nuclei via apt or go..."
+    if [[ "$ENV" == "termux" ]]; then
+      warn "Nuclei not in pkg — installing via Go..."
+      require go && go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+      export PATH="$PATH:$(go env GOPATH)/bin"
+    else
+      $SUDO apt install -y nuclei -qq 2>/dev/null || {
+        warn "Not in apt — trying Go install"
+        require go && go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+        export PATH="$PATH:$(go env GOPATH)/bin"
+      }
+    fi
+  fi
+  info "Updating nuclei templates..."
+  nuclei -update-templates -silent
+  ok "Nuclei ready"
+}
+
+_install_subfinder() {
+  if ! command -v subfinder &>/dev/null; then
+    if [[ "$ENV" == "termux" ]]; then
+      require go && go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+      export PATH="$PATH:$(go env GOPATH)/bin"
+    else
+      $SUDO apt install -y subfinder -qq 2>/dev/null || {
+        warn "Not in apt — trying Go"
+        require go && go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+        export PATH="$PATH:$(go env GOPATH)/bin"
+      }
+    fi
+  fi
+  ok "subfinder ready"
+}
+
+_install_phoneinfoga() {
+  local dest="${TOOLS_DIR}/phoneinfoga"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning PhoneInfoga..."
+    git clone --depth=1 https://github.com/sundowndev/phoneinfoga "$dest"
+    warn "Build requires Go. Run in ${dest}: go build -o phoneinfoga"
+  else
+    ok "PhoneInfoga already cloned"
+  fi
+}
+
+_install_intelx() {
+  local dest="${TOOLS_DIR}/intelx"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning IntelX CLI..."
+    git clone --depth=1 https://github.com/IntelligenceX/SDK "$dest"
+    pip3 install requests --break-system-packages -q
+    ok "IntelX cloned → ${dest}"
+  else
+    ok "IntelX already cloned"
+  fi
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 10 — CONFIG
+# ═══════════════════════════════════════════════════════════════
+module_config() {
+  banner
+  section "CONFIGURATION"
+  echo -e "  ${DIM}Config file: ${CONF}${NC}"
+  echo
+  load_config
+  echo -e "  Current settings:"
+  echo -e "  Shodan API Key : ${SHODAN_API_KEY:-${R}not set${NC}}"
+  echo -e "  VT API Key     : ${VT_API_KEY:-${R}not set${NC}}"
+  echo -e "  NVD Feed Days  : ${NVD_FEEDS_DAYS:-7}"
+  echo
+
+  echo -e "  ${Y}Edit setting:${NC}"
+  local opts=(
+    "Set Shodan API key"
+    "Set VirusTotal API key"
+    "Set NVD feed days (default 7)"
+    "Edit config file (nano)"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-5]: '
+  select opt in "${opts[@]}"; do
+    case $REPLY in
+      1) read -rp "  Shodan API Key: " k
+         sed -i "s/SHODAN_API_KEY=.*/SHODAN_API_KEY=\"${k}\"/" "$CONF"; ok "Saved" ;;
+      2) read -rp "  VT API Key: " k
+         sed -i "s/VT_API_KEY=.*/VT_API_KEY=\"${k}\"/" "$CONF"; ok "Saved" ;;
+      3) read -rp "  Days: " d
+         sed -i "s/NVD_FEEDS_DAYS=.*/NVD_FEEDS_DAYS=${d}/" "$CONF"; ok "Saved" ;;
+      4) nano "$CONF" ;;
+      5) return ;;
+    esac
+    break
+  done
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 11 — VIEW LOGS
+# ═══════════════════════════════════════════════════════════════
+module_logs() {
+  banner
+  section "SAVED RESULTS"
+  echo -e "  ${DIM}Logs dir: ${LOGS_DIR}${NC}"
+  echo -e "  ${DIM}Work dir: ${WORKDIR}${NC}"
+  echo
+  if ! ls "${LOGS_DIR}"/*.txt &>/dev/null && ! ls "${WORKDIR}" &>/dev/null; then
+    info "No results yet."
+    pause
+    return
+  fi
+
+  if command -v fzf &>/dev/null; then
+    local chosen
+    chosen=$(find "${LOGS_DIR}" "${WORKDIR}" -type f -name "*.txt" 2>/dev/null \
+      | fzf --height=60% --border --prompt="  Select file: ")
+    [[ -n "$chosen" ]] && less "$chosen"
+  else
+    ls -lt "${LOGS_DIR}"/*.txt 2>/dev/null | head -20
+    echo
+    read -rp "  ${C}View file (full path or Enter to skip): ${NC}" f
+    [[ -n "$f" && -f "$f" ]] && less "$f"
+  fi
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MAIN MENU
+# ═══════════════════════════════════════════════════════════════
+main_menu() {
+  init_dirs
+  load_config
+
+  while true; do
+    banner
+    echo -e "  ${BOLD}${W}MAIN MENU${NC}"
+    echo
+    echo -e "  ${C}[1]${NC}  Passive Recon          ${DIM}(theHarvester, amass, subfinder, crt.sh, dorks)${NC}"
+    echo -e "  ${C}[2]${NC}  Exploit & Zero-Day Intel ${DIM}(NVD, ExploitDB, MSF, GitHub PoC, CISA KEV)${NC}"
+    echo -e "  ${C}[3]${NC}  Network & Host Intel   ${DIM}(nmap, masscan, netdiscover, ASN)${NC}"
+    echo -e "  ${C}[4]${NC}  People & Identity      ${DIM}(sherlock, holehe, maigret, h8mail, phoneinfoga)${NC}"
+    echo -e "  ${C}[5]${NC}  Web App Recon          ${DIM}(nuclei, nikto, gobuster, ffuf, sqlmap, wpscan)${NC}"
+    echo -e "  ${C}[6]${NC}  Dark Web & Leaks       ${DIM}(HIBP, IntelX, Tor, paste sites)${NC}"
+    echo -e "  ${C}[7]${NC}  Wireless & Bluetooth   ${DIM}(hcxdumptool, bt scan, Blue Hydra, WiGLE)${NC}"
+    echo -e "  ${Y}[8]${NC}  Update All Tools       ${DIM}(apt + pip + git repos + nuclei templates)${NC}"
+    echo -e "  ${Y}[9]${NC}  Install Tools          ${DIM}(first-time setup)${NC}"
+    echo -e "  ${M}[c]${NC}  Config                 ${DIM}(API keys, settings)${NC}"
+    echo -e "  ${M}[l]${NC}  View Results/Logs"
+    echo -e "  ${R}[q]${NC}  Quit"
+    echo
+    if [[ "$ENV" == "termux" ]]; then
+      echo -e "  ${DIM}Environment: ${G}Termux${NC} ${DIM}| Some tools need NetHunter chroot for full features${NC}"
+    else
+      echo -e "  ${DIM}Environment: ${C}Kali NetHunter${NC}"
+    fi
+    echo
+    read -rp "  ${BOLD}Choose: ${NC}" choice
+
+    case "$choice" in
+      1) module_passive_recon ;;
+      2) module_exploit_intel ;;
+      3) module_network_intel ;;
+      4) module_people_osint ;;
+      5) module_webapp_recon ;;
+      6) module_darkweb_leaks ;;
+      7) module_wireless ;;
+      8) module_update ;;
+      9) module_install ;;
+      c|C) module_config ;;
+      l|L) module_logs ;;
+      q|Q) echo -e "\n  ${DIM}Stay ethical. Stay legal.${NC}\n"; exit 0 ;;
+      *) warn "Invalid choice" ;;
+    esac
+  done
+}
+
+# ── Entry point ──────────────────────────────────────────────
+main_menu
