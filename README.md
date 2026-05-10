@@ -30,6 +30,8 @@ For first-time tool install: choose [9] Install Tools from the main menu.
 
 ## ENVIRONMENT SUPPORT
 
+| Feature | Kali / NetHunter | Termux |
+|---------|:---------------:|:------:|
 | Auto-detection | ✅ | ✅ |
 | Passive Recon | ✅ Full | ✅ Full |
 | Exploit Intel | ✅ Full | ✅ Full |
