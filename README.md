@@ -52,11 +52,11 @@ For first-time tool install: choose **[9] Install Tools** from the main menu.
 
 | # | Module | Tools |
 |---|--------|-------|
-| 1 | Passive Recon | theHarvester, amass, subfinder, dnsx, crt.sh, Google Dorks |
+| 1 | Passive Recon | theHarvester, amass, subfinder, dnsx, crt.sh, recon-ng, metagoofil, x-osint, websift, spiderfoot |
 | 2 | Exploit & Zero-Day Intel | NVD CVE feed, ExploitDB/searchsploit, Metasploit, GitHub PoC, CISA KEV, PacketStorm |
 | 3 | Network & Host Intel | nmap (quick/full/vuln/stealth), masscan, netdiscover, traceroute+ASN |
-| 4 | People & Identity | sherlock, holehe, maigret, socialscan, phoneinfoga, h8mail |
-| 5 | Web App Recon | nuclei, nikto, gobuster, ffuf, whatweb, wafw00f, wpscan, sqlmap |
+| 4 | People & Identity | sherlock, holehe, maigret, socialscan, phoneinfoga, h8mail, ghosttrack, leaker, daprofile, clatscope |
+| 5 | Web App Recon | nuclei, nikto, gobuster, ffuf, whatweb, wafw00f, wpscan, sqlmap, xssrecon, sn1per, fsociety |
 | 6 | Dark Web & Leaks | HIBP, IntelX CLI, Tor routing, paste site dorks |
 | 7 | Wireless & Bluetooth | hcxdumptool (wlan1), BT scan, Blue Hydra, WiGLE |
 | 8 | Threat Intel | ThreatFox, MalwareBazaar, GreyNoise, URLhaus, AbuseIPDB, H.I.V.E |
@@ -97,6 +97,13 @@ HIBP_API_KEY=""       # haveibeenpwned.com — paid
 ---
 
 ## CHANGELOG
+
+### v2.4.0
+- Passive Recon: added Recon-ng (100+ modules), Metagoofil (document metadata), X-osint (all-in-one)
+- People OSINT: added ClatScope (unified IP/domain/email/phone/username)
+- Web App: added fsociety (modular pentest framework wrapper)
+- Installer: separate groups for v2.3 and v2.4 tools + Install ALL option
+- Updater: covers all new git-cloned tools automatically
 
 ### v2.3.0
 - Added NEW MODULE: Threat Intel (ThreatFox, MalwareBazaar, GreyNoise, URLhaus, AbuseIPDB, H.I.V.E)

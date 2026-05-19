@@ -31,7 +31,7 @@ TOOLS_DIR="${TOOL_DIR}/tools"
 LOGS_DIR="${TOOL_DIR}/logs"
 WORKDIR="${HOME}/osint-results"
 CONF="${TOOL_DIR}/config.env"
-VERSION="2.3.0"
+VERSION="2.4.0"
 
 # ── Colors ───────────────────────────────────────────────────
 R='\033[0;31m'  G='\033[0;32m'  Y='\033[1;33m'
@@ -217,6 +217,36 @@ _run_crtsh() {
     | sort -u \
     | tee "${2}/crtsh_${1}.txt"
   ok "Done."
+}
+
+_run_reconng() {
+  require recon-ng || { warn "Install: apt install recon-ng"; return; }
+  info "Launching Recon-ng for $1 ..."
+  info "Commands: marketplace install all → workspaces create $1 → modules load"
+  recon-ng -w "$1" 2>&1 | tee "${2}/reconng_${1}.txt"
+  pause
+}
+
+_run_metagoofil() {
+  if command -v metagoofil &>/dev/null; then
+    read -rp "  ${C}File types (e.g. pdf,docx,xlsx): ${NC}" ftypes
+    ftypes="${ftypes:-pdf,docx,xlsx,pptx}"
+    info "Running Metagoofil on $1 for filetypes: ${ftypes}..."
+    metagoofil -d "$1" -t "$ftypes" -o "${2}/metagoofil_${1}" -f "${2}/metagoofil_${1}.html" 2>&1       | tee "${2}/metagoofil_raw.txt"
+  else
+    warn "Install: apt install metagoofil OR pip3 install metagoofil"
+  fi
+  pause
+}
+
+_run_xosint() {
+  if [[ -d "${TOOLS_DIR}/xosint" ]]; then
+    read -rp "  ${C}Target (email/phone/IP/domain/username): ${NC}" target
+    python3 "${TOOLS_DIR}/xosint/xosint.py" -q "$target" | tee "${2}/xosint_$(timestamp).txt"
+  else
+    warn "X-osint not installed. Run: osint-ethack install"
+  fi
+  pause
 }
 
 _run_websift() {
@@ -527,9 +557,10 @@ module_people_osint() {
     "GhostTrack     — IP geolocation + phone OSINT"
     "Leaker         — search 10 breach databases at once"
     "DaProfiler     — full person profiling (social, email, phone)"
+    "ClatScope      — unified OSINT: IP/domain/email/phone/username"
     "Back"
   )
-  PS3=$'\n  Choose [1-10]: '
+  PS3=$'\n  Choose [1-11]: '
   select opt in "${opts[@]}"; do
     case $REPLY in
       1) _sherlock ;;
@@ -541,7 +572,8 @@ module_people_osint() {
       7) _ghosttrack ;;
       8) _leaker ;;
       9) _daprofile ;;
-      10) return ;;
+      10) _clatscope ;;
+      11) return ;;
     esac
     break
   done
@@ -650,6 +682,18 @@ _daprofile() {
   pause
 }
 
+_clatscope() {
+  if [[ -d "${TOOLS_DIR}/ClatScope" ]]; then
+    info "Starting ClatScope unified OSINT..."
+    cd "${TOOLS_DIR}/ClatScope"
+    python3 clatscope.py
+  else
+    warn "ClatScope not installed. Run: osint-ethack install"
+    info "Covers: IP, domain, email, phone, username in one tool"
+  fi
+  pause
+}
+
 # ═══════════════════════════════════════════════════════════════
 #  MODULE 5 — WEB APP RECON
 # ═══════════════════════════════════════════════════════════════
@@ -676,9 +720,10 @@ module_webapp_recon() {
     "sqlmap         — SQL injection"
     "XSSRecon       — automated XSS scanner"
     "Sn1per         — full attack surface management"
+    "fsociety       — modular pentest framework wrapper"
     "Back"
   )
-  PS3=$'\n  Choose [1-11]: '
+  PS3=$'\n  Choose [1-12]: '
   select opt in "${opts[@]}"; do
     case $REPLY in
       1) require whatweb   && whatweb "$URL" -v | tee "${outdir}/whatweb.txt" ;;
@@ -691,7 +736,8 @@ module_webapp_recon() {
       8) require sqlmap    && sqlmap -u "$URL" --batch --level=3 | tee "${outdir}/sqlmap.txt" ;;
       9) _xssrecon "$URL" "$outdir" ;;
       10) _sn1per "$host" "$outdir" ;;
-      11) return ;;
+      11) _fsociety ;;
+      12) return ;;
     esac
     ok "Saved → ${outdir}/"
     break
@@ -740,6 +786,18 @@ _sn1per() {
     bash "${TOOLS_DIR}/Sn1per/sniper" -t "$1" -m normal | tee "${2}/sn1per.txt"
   else
     warn "Sn1per not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+_fsociety() {
+  if command -v fsociety &>/dev/null; then
+    fsociety
+  elif [[ -d "${TOOLS_DIR}/fsociety" ]]; then
+    python3 "${TOOLS_DIR}/fsociety/fsociety/main.py"
+  else
+    warn "fsociety not installed. Run: osint-ethack install"
+    info "Modular pentest framework — wraps 100+ security tools"
   fi
   pause
 }
@@ -1101,6 +1159,9 @@ _update_git() {
     "DaProfiler"
     "XSSRecon"
     "Sn1per"
+    "xosint"
+    "ClatScope"
+    "fsociety"
   )
   for repo in "${repos[@]}"; do
     local rpath="${TOOLS_DIR}/${repo}"
@@ -1340,6 +1401,55 @@ _install_sn1per() {
   fi
 }
 
+_install_reconng() {
+  if ! command -v recon-ng &>/dev/null; then
+    pkg_install recon-ng 2>/dev/null || pip_install recon-ng
+  fi
+  ok "Recon-ng ready"
+}
+
+_install_metagoofil() {
+  if ! command -v metagoofil &>/dev/null; then
+    pkg_install metagoofil 2>/dev/null || pip_install metagoofil
+  fi
+  ok "Metagoofil ready"
+}
+
+_install_xosint() {
+  local dest="${TOOLS_DIR}/xosint"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning X-osint..."
+    git clone --depth=1 https://github.com/TermuxHackz/X-osint "$dest" 2>/dev/null       || git clone --depth=1 https://github.com/R0X4R/X-osint "$dest" 2>/dev/null       || { warn "X-osint — check GitHub for latest URL"; return; }
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "X-osint cloned → ${dest}"
+  else
+    ok "X-osint already present."
+  fi
+}
+
+_install_clatscope() {
+  local dest="${TOOLS_DIR}/ClatScope"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning ClatScope..."
+    git clone --depth=1 https://github.com/MrEmpy/ClatScope "$dest" 2>/dev/null       || { warn "ClatScope — check GitHub for latest URL"; return; }
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "ClatScope cloned → ${dest}"
+  else
+    ok "ClatScope already present."
+  fi
+}
+
+_install_fsociety() {
+  if ! command -v fsociety &>/dev/null; then
+    pip_install fsociety 2>/dev/null || {
+      local dest="${TOOLS_DIR}/fsociety"
+      git clone --depth=1 https://github.com/Manisso/fsociety "$dest" 2>/dev/null
+      pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    }
+  fi
+  ok "fsociety ready"
+}
+
 _install_hive() {
   local dest="${TOOLS_DIR}/hive"
   if [[ ! -d "$dest" ]]; then
@@ -1442,11 +1552,11 @@ main_menu() {
     banner
     echo -e "  ${BOLD}${W}MAIN MENU${NC}"
     echo
-    echo -e "  ${C}[1]${NC}  Passive Recon          ${DIM}(theHarvester, amass, subfinder, crt.sh, dorks)${NC}"
+    echo -e "  ${C}[1]${NC}  Passive Recon          ${DIM}(theHarvester, amass, subfinder, recon-ng, metagoofil, x-osint)${NC}"
     echo -e "  ${C}[2]${NC}  Exploit & Zero-Day Intel ${DIM}(NVD, ExploitDB, MSF, GitHub PoC, CISA KEV)${NC}"
     echo -e "  ${C}[3]${NC}  Network & Host Intel   ${DIM}(nmap, masscan, netdiscover, ASN)${NC}"
-    echo -e "  ${C}[4]${NC}  People & Identity      ${DIM}(sherlock, holehe, maigret, h8mail, phoneinfoga)${NC}"
-    echo -e "  ${C}[5]${NC}  Web App Recon          ${DIM}(nuclei, nikto, gobuster, ffuf, sqlmap, wpscan)${NC}"
+    echo -e "  ${C}[4]${NC}  People & Identity      ${DIM}(sherlock, holehe, maigret, ghosttrack, clatscope, leaker)${NC}"
+    echo -e "  ${C}[5]${NC}  Web App Recon          ${DIM}(nuclei, nikto, gobuster, ffuf, sqlmap, xssrecon, fsociety)${NC}"
     echo -e "  ${C}[6]${NC}  Dark Web & Leaks       ${DIM}(HIBP, IntelX, Tor, paste sites)${NC}"
     echo -e "  ${C}[7]${NC}  Wireless & Bluetooth   ${DIM}(hcxdumptool, bt scan, Blue Hydra, WiGLE)${NC}"
     echo -e "  ${C}[8]${NC}  Threat Intel           ${DIM}(ThreatFox, MalwareBazaar, GreyNoise, URLhaus, H.I.V.E)${NC}"
