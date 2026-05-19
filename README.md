@@ -1,3 +1,4 @@
+![osint-ethack banner](banner.svg)
 # osint-ethack — Offensive OSINT Toolkit
 
 Modular terminal-based OSINT toolkit focused on ethical hacking recon,
