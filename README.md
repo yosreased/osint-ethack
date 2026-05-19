@@ -128,7 +128,6 @@ HIBP_API_KEY=""       # haveibeenpwned.com — paid
 - 7 modules: Passive Recon, Exploit Intel, Network, People, Web App, Dark Web, Wireless
 - Self-updating via apt + pip + git in one command
 - CISA KEV, NVD CVE feed, GitHub PoC finder
-- Kali NetHunter optimized (OP8, kernel 4.19.157-ViP3R)
 
 ---
 
