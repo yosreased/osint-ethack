@@ -31,7 +31,7 @@ TOOLS_DIR="${TOOL_DIR}/tools"
 LOGS_DIR="${TOOL_DIR}/logs"
 WORKDIR="${HOME}/osint-results"
 CONF="${TOOL_DIR}/config.env"
-VERSION="2.2.0"
+VERSION="2.3.0"
 
 # ── Colors ───────────────────────────────────────────────────
 R='\033[0;31m'  G='\033[0;32m'  Y='\033[1;33m'
@@ -219,6 +219,30 @@ _run_crtsh() {
   ok "Done."
 }
 
+_run_websift() {
+  if [[ -d "${TOOLS_DIR}/WebSift" ]]; then
+    info "Running WebSift on $1 ..."
+    python3 "${TOOLS_DIR}/WebSift/websift.py" "$1" | tee "${2}/websift_${1}.txt"
+  else
+    warn "WebSift not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+_run_spiderfoot() {
+  if command -v spiderfoot &>/dev/null || [[ -d "${TOOLS_DIR}/spiderfoot" ]]; then
+    info "Running SpiderFoot scan on $1 ..."
+    if [[ -d "${TOOLS_DIR}/spiderfoot" ]]; then
+      python3 "${TOOLS_DIR}/spiderfoot/sf.py" -s "$1" -t INTERNET_NAME,IP_ADDRESS,EMAILADDR -q         | tee "${2}/spiderfoot_${1}.txt"
+    else
+      spiderfoot -s "$1" -t INTERNET_NAME,IP_ADDRESS,EMAILADDR -q         | tee "${2}/spiderfoot_${1}.txt"
+    fi
+  else
+    warn "SpiderFoot not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
 _google_dorks() {
   local t="$1"
   banner
@@ -271,9 +295,11 @@ module_exploit_intel() {
     "Vulners CLI         — vuln scanner & CVE lookup"
     "PacketStorm feed    — latest advisories (curl)"
     "CISA KEV feed       — known exploited vulnerabilities"
+    "TweetFeed IOC       — live IOCs from infosec community"
+    "CVE GitHub Scraper  — all CVE exploits from GitHub"
     "Back"
   )
-  PS3=$'\n  Choose [1-8]: '
+  PS3=$'\n  Choose [1-10]: '
   select opt in "${opts[@]}"; do
     case $REPLY in
       1) _nvd_feed ;;
@@ -283,7 +309,9 @@ module_exploit_intel() {
       5) _vulners ;;
       6) _packetstorm ;;
       7) _cisa_kev ;;
-      8) return ;;
+      8) _tweetfeed_ioc ;;
+      9) _cve_github_scraper ;;
+      10) return ;;
     esac
     break
   done
@@ -391,6 +419,34 @@ _cisa_kev() {
   pause
 }
 
+_tweetfeed_ioc() {
+  require curl || return
+  require jq   || return
+  info "Fetching live IOCs from TweetFeed (infosec community)..."
+  echo
+  echo -e "  ${Y}[URLs]${NC}"
+  curl -s "https://api.tweetfeed.live/v1/today/urls"     | jq -r '.[] | "\(.date)  \(.value)  [\(.tags[]?)]"' 2>/dev/null     | head -15 | tee "${LOGS_DIR}/ioc_urls_$(timestamp).txt"
+  echo
+  echo -e "  ${Y}[Malicious IPs]${NC}"
+  curl -s "https://api.tweetfeed.live/v1/today/ip"     | jq -r '.[] | "\(.date)  \(.value)  [\(.tags[]?)]"' 2>/dev/null     | head -15 | tee "${LOGS_DIR}/ioc_ips_$(timestamp).txt"
+  echo
+  echo -e "  ${Y}[Hashes]${NC}"
+  curl -s "https://api.tweetfeed.live/v1/today/sha256"     | jq -r '.[] | "\(.date)  \(.value)"' 2>/dev/null     | head -10 | tee "${LOGS_DIR}/ioc_hashes_$(timestamp).txt"
+  pause
+}
+
+_cve_github_scraper() {
+  require curl || return
+  require jq   || return
+  read -rp "  ${C}CVE ID (e.g. CVE-2024-1234) or year (e.g. 2024): ${NC}" input
+  [[ -z "$input" ]] && return
+  info "Searching GitHub for CVE exploits: ${input}..."
+  curl -s "https://api.github.com/search/repositories?q=${input}+exploit+CVE&sort=updated&per_page=15"     | jq -r '.items[] | "\(.updated_at[:10])  ★\(.stargazers_count)  \(.full_name)  \(.html_url)"'     | sort -r | tee "${LOGS_DIR}/cve_scraper_${input}_$(timestamp).txt"
+  echo
+  info "Also check: https://github.com/search?q=${input}+exploit&type=repositories"
+  pause
+}
+
 # ═══════════════════════════════════════════════════════════════
 #  MODULE 3 — NETWORK & HOST INTEL
 # ═══════════════════════════════════════════════════════════════
@@ -468,9 +524,12 @@ module_people_osint() {
     "socialscan     — username/email availability"
     "phoneinfoga    — phone number OSINT"
     "h8mail         — email breach lookup"
+    "GhostTrack     — IP geolocation + phone OSINT"
+    "Leaker         — search 10 breach databases at once"
+    "DaProfiler     — full person profiling (social, email, phone)"
     "Back"
   )
-  PS3=$'\n  Choose [1-7]: '
+  PS3=$'\n  Choose [1-10]: '
   select opt in "${opts[@]}"; do
     case $REPLY in
       1) _sherlock ;;
@@ -479,7 +538,10 @@ module_people_osint() {
       4) _socialscan ;;
       5) _phoneinfoga ;;
       6) _h8mail ;;
-      7) return ;;
+      7) _ghosttrack ;;
+      8) _leaker ;;
+      9) _daprofile ;;
+      10) return ;;
     esac
     break
   done
@@ -549,6 +611,45 @@ _h8mail() {
   pause
 }
 
+_ghosttrack() {
+  if [[ -d "${TOOLS_DIR}/GhostTrack" ]]; then
+    info "Starting GhostTrack..."
+    cd "${TOOLS_DIR}/GhostTrack"
+    python3 GhostTR.py
+  else
+    warn "GhostTrack not installed. Run: osint-ethack install"
+    info "Supports: IP geolocation, phone OSINT, social footprint"
+  fi
+  pause
+}
+
+_leaker() {
+  if command -v leaker &>/dev/null || [[ -d "${TOOLS_DIR}/leaker" ]]; then
+    read -rp "  ${C}Email or domain to search in breaches: ${NC}" target
+    if [[ -d "${TOOLS_DIR}/leaker" ]]; then
+      python3 "${TOOLS_DIR}/leaker/leaker.py" "$target" | tee "${LOGS_DIR}/leaker_$(timestamp).txt"
+    else
+      leaker "$target" | tee "${LOGS_DIR}/leaker_$(timestamp).txt"
+    fi
+  else
+    warn "Leaker not installed. Run: osint-ethack install"
+    info "Searches 10 breach databases simultaneously"
+  fi
+  pause
+}
+
+_daprofile() {
+  if [[ -d "${TOOLS_DIR}/DaProfiler" ]]; then
+    info "Starting DaProfiler..."
+    cd "${TOOLS_DIR}/DaProfiler"
+    python3 DaProfiler.py
+  else
+    warn "DaProfiler not installed. Run: osint-ethack install"
+    info "Finds: addresses, social accounts, emails, phone numbers"
+  fi
+  pause
+}
+
 # ═══════════════════════════════════════════════════════════════
 #  MODULE 5 — WEB APP RECON
 # ═══════════════════════════════════════════════════════════════
@@ -573,9 +674,11 @@ module_webapp_recon() {
     "nuclei         — template-based vuln scanner"
     "wpscan         — WordPress scanner"
     "sqlmap         — SQL injection"
+    "XSSRecon       — automated XSS scanner"
+    "Sn1per         — full attack surface management"
     "Back"
   )
-  PS3=$'\n  Choose [1-9]: '
+  PS3=$'\n  Choose [1-11]: '
   select opt in "${opts[@]}"; do
     case $REPLY in
       1) require whatweb   && whatweb "$URL" -v | tee "${outdir}/whatweb.txt" ;;
@@ -586,7 +689,9 @@ module_webapp_recon() {
       6) _nuclei "$URL" "$outdir" ;;
       7) require wpscan    && wpscan --url "$URL" --enumerate ap,at,u | tee "${outdir}/wpscan.txt" ;;
       8) require sqlmap    && sqlmap -u "$URL" --batch --level=3 | tee "${outdir}/sqlmap.txt" ;;
-      9) return ;;
+      9) _xssrecon "$URL" "$outdir" ;;
+      10) _sn1per "$host" "$outdir" ;;
+      11) return ;;
     esac
     ok "Saved → ${outdir}/"
     break
@@ -613,6 +718,28 @@ _nuclei() {
     nuclei -u "$1" -severity critical,high,medium -o "${2}/nuclei.txt" | tee /dev/tty
   else
     warn "Nuclei not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+_xssrecon() {
+  if [[ -d "${TOOLS_DIR}/XSSRecon" ]]; then
+    info "Running XSSRecon on $1 ..."
+    python3 "${TOOLS_DIR}/XSSRecon/xssrecon.py" -u "$1" | tee "${2}/xssrecon.txt"
+  else
+    warn "XSSRecon not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+_sn1per() {
+  if command -v sniper &>/dev/null; then
+    info "Running Sn1per attack surface scan on $1 ..."
+    sniper -t "$1" -m normal | tee "${2}/sn1per.txt"
+  elif [[ -d "${TOOLS_DIR}/Sn1per" ]]; then
+    bash "${TOOLS_DIR}/Sn1per/sniper" -t "$1" -m normal | tee "${2}/sn1per.txt"
+  else
+    warn "Sn1per not installed. Run: osint-ethack install"
   fi
   pause
 }
@@ -798,7 +925,113 @@ _blue_hydra() {
 }
 
 # ═══════════════════════════════════════════════════════════════
-#  MODULE 8 — UPDATER
+#  MODULE 8 — THREAT INTEL
+# ═══════════════════════════════════════════════════════════════
+module_threat_intel() {
+  banner
+  section "THREAT INTEL"
+  echo -e "  ${Y}Select source:${NC}"
+  local opts=(
+    "ThreatFox         — live C2/malware IOC feed (Abuse.ch)"
+    "MalwareBazaar     — search malware samples by hash/family"
+    "GreyNoise         — check IP reputation & noise"
+    "URLhaus           — malicious URL lookup"
+    "AbuseIPDB         — IP abuse score lookup"
+    "H.I.V.E           — multi-source OSINT (Shodan+IntelX+Hunter)"
+    "Back"
+  )
+  PS3=$'\n  Choose [1-7]: '
+  select opt in "${opts[@]}"; do
+    case $REPLY in
+      1) _threatfox ;;
+      2) _malwarebazaar ;;
+      3) _greynoise ;;
+      4) _urlhaus ;;
+      5) _abuseipdb ;;
+      6) _hive_osint ;;
+      7) return ;;
+    esac
+    break
+  done
+}
+
+_threatfox() {
+  require curl || return
+  require jq   || return
+  info "Fetching ThreatFox latest IOCs (C2 servers, malware)..."
+  curl -s -X POST "https://threatfox-api.abuse.ch/api/v1/"     -H "Content-Type: application/json"     -d '{"query":"get_iocs","days":1}'     | jq -r '.data[]? | "\(.ioc_type)  \(.ioc)  [\(.malware_printable)]  \(.confidence_level)%"'     | head -25 | tee "${LOGS_DIR}/threatfox_$(timestamp).txt"
+  pause
+}
+
+_malwarebazaar() {
+  require curl || return
+  require jq   || return
+  read -rp "  ${C}Search by (hash/tag/family/signature): ${NC}" stype
+  read -rp "  ${C}Value: ${NC}" val
+  local query="{"query":"get_info","hash":"${val}"}"
+  [[ "$stype" != "hash" ]] && query="{"query":"get_taginfo","tag":"${val}"}"
+  info "Querying MalwareBazaar..."
+  curl -s -X POST "https://mb-api.abuse.ch/api/v1/"     -H "Content-Type: application/json"     -d "$query"     | jq -r '.data[]? | "\(.sha256_hash)  \(.file_name)  [\(.tags[]?)]  \(.signature)"'     | head -20 | tee "${LOGS_DIR}/malwarebazaar_$(timestamp).txt"
+  pause
+}
+
+_greynoise() {
+  require curl || return
+  require jq   || return
+  read -rp "  ${C}IP address to check: ${NC}" ip
+  info "Querying GreyNoise for ${ip}..."
+  curl -s "https://api.greynoise.io/v3/community/${ip}"     -H "Accept: application/json"     | jq -r '"IP: \(.ip)
+Noise: \(.noise)
+Riot: \(.riot)
+Classification: \(.classification)
+Name: \(.name)
+Message: \(.message)"'     2>/dev/null | tee "${LOGS_DIR}/greynoise_${ip}_$(timestamp).txt"
+  pause
+}
+
+_urlhaus() {
+  require curl || return
+  require jq   || return
+  read -rp "  ${C}URL or domain to check: ${NC}" target
+  info "Querying URLhaus..."
+  curl -s -X POST "https://urlhaus-api.abuse.ch/v1/url/"     -d "url=${target}"     | jq -r '"URL: \(.url)
+Status: \(.url_status)
+Threat: \(.threat)
+Tags: \(.tags)"'     2>/dev/null | tee "${LOGS_DIR}/urlhaus_$(timestamp).txt"
+  pause
+}
+
+_abuseipdb() {
+  require curl || return
+  require jq   || return
+  load_config
+  if [[ -z "${ABUSEIPDB_API_KEY:-}" ]]; then
+    warn "No AbuseIPDB API key. Set it in config (free at abuseipdb.com)"
+    return
+  fi
+  read -rp "  ${C}IP to check: ${NC}" ip
+  curl -s "https://api.abuseipdb.com/api/v2/check?ipAddress=${ip}&maxAgeInDays=90"     -H "Key: ${ABUSEIPDB_API_KEY}"     -H "Accept: application/json"     | jq -r '.data | "IP: \(.ipAddress)
+Abuse Score: \(.abuseConfidenceScore)%
+Country: \(.countryCode)
+ISP: \(.isp)
+Reports: \(.totalReports)"'     | tee "${LOGS_DIR}/abuseipdb_${ip}_$(timestamp).txt"
+  pause
+}
+
+_hive_osint() {
+  if [[ -d "${TOOLS_DIR}/hive" ]]; then
+    info "Starting H.I.V.E multi-source OSINT..."
+    cd "${TOOLS_DIR}/hive"
+    python3 hive.py
+  else
+    warn "H.I.V.E not installed. Run: osint-ethack install"
+    info "Aggregates: Shodan, IntelX, Hunter.io, Censys"
+  fi
+  pause
+}
+
+# ═══════════════════════════════════════════════════════════════
+#  MODULE 9 — UPDATER
 # ═══════════════════════════════════════════════════════════════
 module_update() {
   banner
@@ -862,6 +1095,12 @@ _update_git() {
     "intelx"
     "phoneinfoga"
     "subfinder"
+    "WebSift"
+    "spiderfoot"
+    "GhostTrack"
+    "DaProfiler"
+    "XSSRecon"
+    "Sn1per"
   )
   for repo in "${repos[@]}"; do
     local rpath="${TOOLS_DIR}/${repo}"
@@ -879,7 +1118,7 @@ _update_git() {
 }
 
 # ═══════════════════════════════════════════════════════════════
-#  MODULE 9 — INSTALLER
+#  MODULE 10 — INSTALLER
 # ═══════════════════════════════════════════════════════════════
 module_install() {
   banner
@@ -1015,6 +1254,104 @@ _install_phoneinfoga() {
   fi
 }
 
+_install_websift() {
+  local dest="${TOOLS_DIR}/WebSift"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning WebSift..."
+    git clone --depth=1 https://github.com/Encryptor-Sec/WebSift "$dest" 2>/dev/null       || git clone --depth=1 https://github.com/WebSift/WebSift "$dest" 2>/dev/null       || { warn "WebSift repo not found — check GitHub manually"; return; }
+    pip_install requests beautifulsoup4
+    ok "WebSift cloned → ${dest}"
+  else
+    ok "WebSift already present."
+  fi
+}
+
+_install_spiderfoot() {
+  local dest="${TOOLS_DIR}/spiderfoot"
+  if ! command -v spiderfoot &>/dev/null && [[ ! -d "$dest" ]]; then
+    info "Cloning SpiderFoot..."
+    git clone --depth=1 https://github.com/smicallef/spiderfoot "$dest"
+    pip_install -r "${dest}/requirements.txt"
+    ok "SpiderFoot cloned → ${dest}"
+  else
+    ok "SpiderFoot already present."
+  fi
+}
+
+_install_ghosttrack() {
+  local dest="${TOOLS_DIR}/GhostTrack"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning GhostTrack..."
+    git clone --depth=1 https://github.com/HunxByts/GhostTrack "$dest"
+    pip_install -r "${dest}/requirements.txt"
+    ok "GhostTrack cloned → ${dest}"
+  else
+    ok "GhostTrack already present."
+  fi
+}
+
+_install_leaker() {
+  local dest="${TOOLS_DIR}/leaker"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Leaker..."
+    git clone --depth=1 https://github.com/leaker-tool/leaker "$dest" 2>/dev/null       || { warn "Leaker repo — check GitHub for latest URL"; return; }
+    ok "Leaker cloned → ${dest}"
+  else
+    ok "Leaker already present."
+  fi
+}
+
+_install_daprofile() {
+  local dest="${TOOLS_DIR}/DaProfiler"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning DaProfiler..."
+    git clone --depth=1 https://github.com/daprofiler/DaProfiler "$dest"
+    pip_install -r "${dest}/requirements.txt"
+    ok "DaProfiler cloned → ${dest}"
+  else
+    ok "DaProfiler already present."
+  fi
+}
+
+_install_xssrecon() {
+  local dest="${TOOLS_DIR}/XSSRecon"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning XSSRecon..."
+    git clone --depth=1 https://github.com/Ak-wa/XSSRecon "$dest" 2>/dev/null       || { warn "XSSRecon repo — check GitHub for latest URL"; return; }
+    pip_install requests
+    ok "XSSRecon cloned → ${dest}"
+  else
+    ok "XSSRecon already present."
+  fi
+}
+
+_install_sn1per() {
+  if ! command -v sniper &>/dev/null; then
+    local dest="${TOOLS_DIR}/Sn1per"
+    if [[ ! -d "$dest" ]]; then
+      info "Cloning Sn1per..."
+      git clone --depth=1 https://github.com/1N3/Sn1per "$dest"
+      warn "To fully install Sn1per: cd ${dest} && bash install.sh"
+    else
+      ok "Sn1per already cloned."
+    fi
+  else
+    ok "Sn1per already installed."
+  fi
+}
+
+_install_hive() {
+  local dest="${TOOLS_DIR}/hive"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning H.I.V.E..."
+    git clone --depth=1 https://github.com/hive-osint/hive "$dest" 2>/dev/null       || { warn "H.I.V.E repo — check GitHub for latest URL"; return; }
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "H.I.V.E cloned → ${dest}"
+  else
+    ok "H.I.V.E already present."
+  fi
+}
+
 _install_intelx() {
   local dest="${TOOLS_DIR}/intelx"
   if [[ ! -d "$dest" ]]; then
@@ -1112,8 +1449,9 @@ main_menu() {
     echo -e "  ${C}[5]${NC}  Web App Recon          ${DIM}(nuclei, nikto, gobuster, ffuf, sqlmap, wpscan)${NC}"
     echo -e "  ${C}[6]${NC}  Dark Web & Leaks       ${DIM}(HIBP, IntelX, Tor, paste sites)${NC}"
     echo -e "  ${C}[7]${NC}  Wireless & Bluetooth   ${DIM}(hcxdumptool, bt scan, Blue Hydra, WiGLE)${NC}"
-    echo -e "  ${Y}[8]${NC}  Update All Tools       ${DIM}(apt + pip + git repos + nuclei templates)${NC}"
-    echo -e "  ${Y}[9]${NC}  Install Tools          ${DIM}(first-time setup)${NC}"
+    echo -e "  ${C}[8]${NC}  Threat Intel           ${DIM}(ThreatFox, MalwareBazaar, GreyNoise, URLhaus, H.I.V.E)${NC}"
+    echo -e "  ${Y}[9]${NC}  Update All Tools       ${DIM}(apt + pip + git repos + nuclei templates)${NC}"
+    echo -e "  ${Y}[0]${NC}  Install Tools          ${DIM}(first-time setup)${NC}"
     echo -e "  ${M}[c]${NC}  Config                 ${DIM}(API keys, settings)${NC}"
     echo -e "  ${M}[l]${NC}  View Results/Logs"
     echo -e "  ${R}[q]${NC}  Quit"
@@ -1134,8 +1472,9 @@ main_menu() {
       5) module_webapp_recon ;;
       6) module_darkweb_leaks ;;
       7) module_wireless ;;
-      8) module_update ;;
-      9) module_install ;;
+      8) module_threat_intel ;;
+      9) module_update ;;
+      0) module_install ;;
       c|C) module_config ;;
       l|L) module_logs ;;
       q|Q) echo -e "\n  ${DIM}Stay ethical. Stay legal.${NC}\n"; exit 0 ;;
