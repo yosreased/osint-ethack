@@ -1,0 +1,173 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0e1a"/>
+      <stop offset="100%" style="stop-color:#0d1117"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#00ff88"/>
+      <stop offset="100%" style="stop-color:#00ccff"/>
+    </linearGradient>
+    <linearGradient id="redgrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ff3366"/>
+      <stop offset="100%" style="stop-color:#ff6633"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="glow2">
+      <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+      <feMerge><feMergeNode in="coloredBlur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff08" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+
+  <!-- Top glow line -->
+  <rect x="0" y="0" width="1200" height="3" fill="url(#accent)" opacity="0.9"/>
+
+  <!-- Left red accent bar -->
+  <rect x="0" y="0" width="4" height="630" fill="url(#redgrad)" opacity="0.8"/>
+
+  <!-- Decorative circuit lines -->
+  <line x1="80" y1="0" x2="80" y2="630" stroke="#ffffff05" stroke-width="1"/>
+  <line x1="1120" y1="0" x2="1120" y2="630" stroke="#ffffff05" stroke-width="1"/>
+  <line x1="0" y1="80" x2="1200" y2="80" stroke="#ffffff05" stroke-width="1"/>
+  <line x1="0" y1="550" x2="1200" y2="550" stroke="#ffffff05" stroke-width="1"/>
+
+  <!-- Corner brackets -->
+  <path d="M 30 30 L 30 60 M 30 30 L 60 30" stroke="#00ff88" stroke-width="2" fill="none" opacity="0.6"/>
+  <path d="M 1170 30 L 1170 60 M 1170 30 L 1140 30" stroke="#00ff88" stroke-width="2" fill="none" opacity="0.6"/>
+  <path d="M 30 600 L 30 570 M 30 600 L 60 600" stroke="#00ff88" stroke-width="2" fill="none" opacity="0.6"/>
+  <path d="M 1170 600 L 1170 570 M 1170 600 L 1140 600" stroke="#00ff88" stroke-width="2" fill="none" opacity="0.6"/>
+
+  <!-- Terminal window header -->
+  <rect x="100" y="40" width="1000" height="32" rx="6" fill="#161b22" opacity="0.9"/>
+  <circle cx="120" cy="56" r="6" fill="#ff5f56"/>
+  <circle cx="140" cy="56" r="6" fill="#ffbd2e"/>
+  <circle cx="160" cy="56" r="6" fill="#27c93f"/>
+  <text x="600" y="61" font-family="monospace" font-size="12" fill="#ffffff40" text-anchor="middle">root@kali:~$ osint-ethack</text>
+
+  <!-- Main Title -->
+  <text x="600" y="160" font-family="'Courier New', monospace" font-size="62" font-weight="bold" fill="url(#accent)" text-anchor="middle" filter="url(#glow2)">osint-ethack</text>
+
+  <!-- Subtitle -->
+  <text x="600" y="205" font-family="'Courier New', monospace" font-size="18" fill="#ffffff80" text-anchor="middle" letter-spacing="4">OFFENSIVE OSINT TOOLKIT</text>
+
+  <!-- Divider line -->
+  <line x1="200" y1="225" x2="1000" y2="225" stroke="url(#accent)" stroke-width="1" opacity="0.4"/>
+
+  <!-- Platform badges -->
+  <rect x="380" y="238" width="160" height="28" rx="14" fill="#00ff8820" stroke="#00ff88" stroke-width="1"/>
+  <text x="460" y="257" font-family="'Courier New', monospace" font-size="13" fill="#00ff88" text-anchor="middle">Kali NetHunter</text>
+
+  <rect x="560" y="238" width="130" height="28" rx="14" fill="#00ccff20" stroke="#00ccff" stroke-width="1"/>
+  <text x="625" y="257" font-family="'Courier New', monospace" font-size="13" fill="#00ccff" text-anchor="middle">Termux</text>
+
+  <rect x="710" y="238" width="120" height="28" rx="14" fill="#ff336620" stroke="#ff3366" stroke-width="1"/>
+  <text x="770" y="257" font-family="'Courier New', monospace" font-size="13" fill="#ff3366" text-anchor="middle">Kali Linux</text>
+
+  <!-- Module boxes - Row 1 -->
+  <!-- Module 1 -->
+  <rect x="100" y="295" width="185" height="95" rx="6" fill="#161b22" stroke="#00ff8830" stroke-width="1"/>
+  <rect x="100" y="295" width="185" height="4" rx="2" fill="#00ff88" opacity="0.7"/>
+  <text x="192" y="320" font-family="'Courier New', monospace" font-size="11" fill="#00ff88" text-anchor="middle" font-weight="bold">[1] PASSIVE RECON</text>
+  <text x="192" y="338" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">theHarvester • amass</text>
+  <text x="192" y="353" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">subfinder • recon-ng</text>
+  <text x="192" y="368" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">metagoofil • x-osint</text>
+
+  <!-- Module 2 -->
+  <rect x="300" y="295" width="185" height="95" rx="6" fill="#161b22" stroke="#ff336630" stroke-width="1"/>
+  <rect x="300" y="295" width="185" height="4" rx="2" fill="#ff3366" opacity="0.7"/>
+  <text x="392" y="320" font-family="'Courier New', monospace" font-size="11" fill="#ff3366" text-anchor="middle" font-weight="bold">[2] ZERO-DAY INTEL</text>
+  <text x="392" y="338" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">NVD CVE • CISA KEV</text>
+  <text x="392" y="353" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">ExploitDB • MSF</text>
+  <text x="392" y="368" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">GitHub PoC • TweetFeed</text>
+
+  <!-- Module 3 -->
+  <rect x="500" y="295" width="185" height="95" rx="6" fill="#161b22" stroke="#00ccff30" stroke-width="1"/>
+  <rect x="500" y="295" width="185" height="4" rx="2" fill="#00ccff" opacity="0.7"/>
+  <text x="592" y="320" font-family="'Courier New', monospace" font-size="11" fill="#00ccff" text-anchor="middle" font-weight="bold">[3] NETWORK INTEL</text>
+  <text x="592" y="338" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">nmap • masscan</text>
+  <text x="592" y="353" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">netdiscover • ASN</text>
+  <text x="592" y="368" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">traceroute • whois</text>
+
+  <!-- Module 4 -->
+  <rect x="700" y="295" width="185" height="95" rx="6" fill="#161b22" stroke="#ffbd2e30" stroke-width="1"/>
+  <rect x="700" y="295" width="185" height="4" rx="2" fill="#ffbd2e" opacity="0.7"/>
+  <text x="792" y="320" font-family="'Courier New', monospace" font-size="11" fill="#ffbd2e" text-anchor="middle" font-weight="bold">[4] PEOPLE OSINT</text>
+  <text x="792" y="338" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">sherlock • holehe</text>
+  <text x="792" y="353" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">maigret • ghosttrack</text>
+  <text x="792" y="368" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">clatscope • leaker</text>
+
+  <!-- Module 5 -->
+  <rect x="900" y="295" width="200" height="95" rx="6" fill="#161b22" stroke="#bf5af230" stroke-width="1"/>
+  <rect x="900" y="295" width="200" height="4" rx="2" fill="#bf5af2" opacity="0.7"/>
+  <text x="1000" y="320" font-family="'Courier New', monospace" font-size="11" fill="#bf5af2" text-anchor="middle" font-weight="bold">[5] WEB APP RECON</text>
+  <text x="1000" y="338" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">nuclei • nikto • ffuf</text>
+  <text x="1000" y="353" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">gobuster • sqlmap</text>
+  <text x="1000" y="368" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">xssrecon • fsociety</text>
+
+  <!-- Module boxes - Row 2 -->
+  <!-- Module 6 -->
+  <rect x="100" y="405" width="185" height="95" rx="6" fill="#161b22" stroke="#ff336630" stroke-width="1"/>
+  <rect x="100" y="405" width="185" height="4" rx="2" fill="#ff6633" opacity="0.7"/>
+  <text x="192" y="430" font-family="'Courier New', monospace" font-size="11" fill="#ff6633" text-anchor="middle" font-weight="bold">[6] DARK WEB</text>
+  <text x="192" y="448" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">HIBP • IntelX CLI</text>
+  <text x="192" y="463" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">Tor routing</text>
+  <text x="192" y="478" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">paste site dorks</text>
+
+  <!-- Module 7 -->
+  <rect x="300" y="405" width="185" height="95" rx="6" fill="#161b22" stroke="#00ff8830" stroke-width="1"/>
+  <rect x="300" y="405" width="185" height="4" rx="2" fill="#27c93f" opacity="0.7"/>
+  <text x="392" y="430" font-family="'Courier New', monospace" font-size="11" fill="#27c93f" text-anchor="middle" font-weight="bold">[7] WIRELESS / BT</text>
+  <text x="392" y="448" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">hcxdumptool • WiGLE</text>
+  <text x="392" y="463" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">Blue Hydra</text>
+  <text x="392" y="478" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">BT scan • hcitool</text>
+
+  <!-- Module 8 -->
+  <rect x="500" y="405" width="185" height="95" rx="6" fill="#161b22" stroke="#ff336630" stroke-width="1"/>
+  <rect x="500" y="405" width="185" height="4" rx="2" fill="#ff3366" opacity="0.7"/>
+  <text x="592" y="430" font-family="'Courier New', monospace" font-size="11" fill="#ff3366" text-anchor="middle" font-weight="bold">[8] THREAT INTEL</text>
+  <text x="592" y="448" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">ThreatFox • GreyNoise</text>
+  <text x="592" y="463" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">MalwareBazaar</text>
+  <text x="592" y="478" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">URLhaus • AbuseIPDB</text>
+
+  <!-- Update box -->
+  <rect x="700" y="405" width="185" height="95" rx="6" fill="#161b22" stroke="#ffbd2e30" stroke-width="1"/>
+  <rect x="700" y="405" width="185" height="4" rx="2" fill="#ffbd2e" opacity="0.7"/>
+  <text x="792" y="430" font-family="'Courier New', monospace" font-size="11" fill="#ffbd2e" text-anchor="middle" font-weight="bold">[9] AUTO-UPDATE</text>
+  <text x="792" y="448" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">apt + pip + git</text>
+  <text x="792" y="463" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">nuclei templates</text>
+  <text x="792" y="478" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">one command</text>
+
+  <!-- Stats box -->
+  <rect x="900" y="405" width="200" height="95" rx="6" fill="#161b22" stroke="#00ff8830" stroke-width="1"/>
+  <rect x="900" y="405" width="200" height="4" rx="2" fill="url(#accent)" opacity="0.7"/>
+  <text x="1000" y="430" font-family="'Courier New', monospace" font-size="11" fill="#00ff88" text-anchor="middle" font-weight="bold">STATS v2.4.0</text>
+  <text x="1000" y="448" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">50+ tools • 10 modules</text>
+  <text x="1000" y="463" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">self-updating</text>
+  <text x="1000" y="478" font-family="'Courier New', monospace" font-size="9.5" fill="#ffffff60" text-anchor="middle">terminal only</text>
+
+  <!-- Bottom bar -->
+  <rect x="0" y="555" width="1200" height="75" fill="#161b22" opacity="0.6"/>
+
+  <!-- GitHub link -->
+  <text x="600" y="585" font-family="'Courier New', monospace" font-size="14" fill="#ffffff50" text-anchor="middle">github.com/yosreased/osint-ethack</text>
+
+  <!-- Warning -->
+  <text x="600" y="612" font-family="'Courier New', monospace" font-size="11" fill="#ff336680" text-anchor="middle">⚠  For authorized penetration testing and security research only</text>
+
+  <!-- Bottom accent line -->
+  <rect x="0" y="627" width="1200" height="3" fill="url(#accent)" opacity="0.9"/>
+
+  <!-- Scanning animation dots -->
+  <circle cx="1155" cy="56" r="4" fill="#00ff88" opacity="0.9" filter="url(#glow)"/>
+  <text x="1140" y="60" font-family="'Courier New', monospace" font-size="10" fill="#00ff8880" text-anchor="end">LIVE</text>
+</svg>
