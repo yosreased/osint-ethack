@@ -99,42 +99,42 @@ HIBP_API_KEY=""       # haveibeenpwned.com — paid
 ## CHANGELOG
 
 ### v2.5.0
-🐦 Passive Recon: added Twint (Twitter/X scraping, no API needed) and GitDorker (GitHub secret exposure)
-👤 People OSINT: added Emora (username search across 500+ platforms)
-🧅 Dark Web: added Prying Deep (dark web crawler for intelligence gathering)
-📦 Installer: v2.5 tool group added
-🔄 Updater: covers all new tools automatically
+- 🐦 Passive Recon: added Twint (Twitter/X scraping, no API needed) and GitDorker (GitHub secret exposure)
+- 👤 People OSINT: added Emora (username search across 500+ platforms)
+- 🧅 Dark Web: added Prying Deep (dark web crawler for intelligence gathering)
+- 📦 Installer: v2.5 tool group added
+- 🔄 Updater: covers all new tools automatically
 
 ### v2.4.0
-🔍 Passive Recon: added Recon-ng (100+ modules), Metagoofil (document metadata), X-osint (all-in-one)
-👤 People OSINT: added ClatScope (unified IP/domain/email/phone/username)
-🕸️ Web App: added fsociety (modular pentest framework wrapper)
-📦 Installer: separate groups for v2.3 and v2.4 tools + Install ALL option
-🔄 Updater: covers all new git-cloned tools automatically
+- 🔍 Passive Recon: added Recon-ng (100+ modules), Metagoofil (document metadata), X-osint (all-in-one)
+- 👤 People OSINT: added ClatScope (unified IP/domain/email/phone/username)
+- 🕸️ Web App: added fsociety (modular pentest framework wrapper)
+- 📦 Installer: separate groups for v2.3 and v2.4 tools + Install ALL option
+- 🔄 Updater: covers all new git-cloned tools automatically
 
 ### v2.3.0
-🛡️ Added NEW MODULE: Threat Intel (ThreatFox, MalwareBazaar, GreyNoise, URLhaus, AbuseIPDB, H.I.V.E)
-🔍 Passive Recon: added WebSift (email/phone scraper) and SpiderFoot (200+ source aggregator)
-💀 Exploit Intel: added TweetFeed IOC feed and CVE GitHub Scraper
-👤 People OSINT: added GhostTrack, Leaker (10 breach DBs), DaProfiler
-🕸️ Web App: added XSSRecon and Sn1per (attack surface management)
-🔄 Updater now covers all new tools automatically
-⚙️ Config: added AbuseIPDB API key support
+- 🛡️ Added NEW MODULE: Threat Intel (ThreatFox, MalwareBazaar, GreyNoise, URLhaus, AbuseIPDB, H.I.V.E)
+- 🔍 Passive Recon: added WebSift (email/phone scraper) and SpiderFoot (200+ source aggregator)
+- 💀 Exploit Intel: added TweetFeed IOC feed and CVE GitHub Scraper
+- 👤 People OSINT: added GhostTrack, Leaker (10 breach DBs), DaProfiler
+- 🕸️ Web App: added XSSRecon and Sn1per (attack surface management)
+- 🔄 Updater now covers all new tools automatically
+- ⚙️ Config: added AbuseIPDB API key support
 
 ### v2.2.0
-📱 Added full Termux (Android) support
-⚡ Auto-detects environment at startup (Kali / NetHunter / Termux)
-📦 Package manager auto-switches: apt on Kali, pkg on Termux
-🐍 pip installs work on both environments automatically
-📡 Wireless tools warn Termux users to use NetHunter chroot
-📂 Wordlist paths adapt per environment
-🖥️ Main menu displays active environment
+- 📱 Added full Termux (Android) support
+- ⚡ Auto-detects environment at startup (Kali / NetHunter / Termux)
+- 📦 Package manager auto-switches: apt on Kali, pkg on Termux
+- 🐍 pip installs work on both environments automatically
+- 📡 Wireless tools warn Termux users to use NetHunter chroot
+- 📂 Wordlist paths adapt per environment
+- 🖥️ Main menu displays active environment
 
 ### v2.1.0
-🚀 Initial release
-📦 7 modules: Passive Recon, Exploit Intel, Network, People, Web App, Dark Web, Wireless
-🔄 Self-updating via apt + pip + git in one command
-🎯 CISA KEV, NVD CVE feed, GitHub PoC finder
+- 🚀 Initial release
+- 📦 7 modules: Passive Recon, Exploit Intel, Network, People, Web App, Dark Web, Wireless
+- 🔄 Self-updating via apt + pip + git in one command
+- 🎯 CISA KEV, NVD CVE feed, GitHub PoC finder
 
 ---
 
