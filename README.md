@@ -98,6 +98,14 @@ HIBP_API_KEY=""       # haveibeenpwned.com — paid
 
 ## CHANGELOG
 
+### v2.7.0
+- 🔓 NEW FOCUS: tools requiring NO API key or login
+- 🇫🇷 People OSINT: added Hackerwasii (FR/CH/LU/BE persons), Social Analyzer (1000+ sites), Ignorant (phone lookup)
+- 🧅 Dark Web: added Robin (AI-powered Tor crawler + LLM analysis)
+- 📸 Passive Recon: added Osintgram (Instagram), BBot (automated recon), Harpoon (modular plugins)
+- 📦 Installer: v2.7 tool group added
+- 🔄 Updater: covers all new tools automatically
+
 ### v2.6.0
 - 🕵️ People OSINT: added Blackbird (600+ sites), Antisocial (forgotten accounts, 3-tier verify), Cupidcr4wl
 - 🔍 Passive Recon: added GitLeak (GitHub commit metadata), ronin-recon (recursive recon framework), DorkEye (AI-powered Google Dorking)

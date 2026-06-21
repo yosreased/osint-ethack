@@ -31,7 +31,7 @@ TOOLS_DIR="${TOOL_DIR}/tools"
 LOGS_DIR="${TOOL_DIR}/logs"
 WORKDIR="${HOME}/osint-results"
 CONF="${TOOL_DIR}/config.env"
-VERSION="2.6.0"
+VERSION="2.7.0"
 
 # ── Colors ───────────────────────────────────────────────────
 R='\033[0;31m'  G='\033[0;32m'  Y='\033[1;33m'
@@ -217,6 +217,45 @@ _run_crtsh() {
     | sort -u \
     | tee "${2}/crtsh_${1}.txt"
   ok "Done."
+}
+
+_run_osintgram() {
+  if [[ -d "${TOOLS_DIR}/Osintgram" ]]; then
+    read -rp "  ${C}Instagram username to investigate: ${NC}" u
+    info "Starting Osintgram for: ${u}..."
+    cd "${TOOLS_DIR}/Osintgram"
+    python3 main.py "$u"
+  else
+    warn "Osintgram not installed. Run: osint-ethack install"
+    info "Note: requires Instagram login session (not API key)"
+  fi
+  pause
+}
+
+_run_bbot() {
+  if command -v bbot &>/dev/null; then
+    info "Running BBot on $1 (automated OSINT recon)..."
+    bbot -t "$1" -p subdomain-enum -o "${2}/bbot_${1}"       | tee "${2}/bbot_raw.txt"
+  else
+    warn "BBot not installed. Run: osint-ethack install"
+    info "pip3 install bbot — no API needed for core modules"
+  fi
+  pause
+}
+
+_run_harpoon() {
+  if command -v harpoon &>/dev/null || [[ -d "${TOOLS_DIR}/harpoon" ]]; then
+    info "Launching Harpoon for: $1..."
+    if [[ -d "${TOOLS_DIR}/harpoon" ]]; then
+      python3 "${TOOLS_DIR}/harpoon/harpoon.py" -t "$1"         | tee "${2}/harpoon_${1}_$(timestamp).txt"
+    else
+      harpoon -t "$1" | tee "${2}/harpoon_${1}_$(timestamp).txt"
+    fi
+  else
+    warn "Harpoon not installed. Run: osint-ethack install"
+    info "Modular plugin system — many plugins work without API keys"
+  fi
+  pause
 }
 
 _run_gitleak() {
@@ -626,9 +665,12 @@ module_people_osint() {
     "Blackbird      — username search across 600+ websites"
     "Antisocial     — find FORGOTTEN accounts (3-tier verify, ~5% false positives)"
     "Cupidcr4wl     — username/phone search on adult platforms"
+    "Hackerwasii    — FR/CH/LU/BE person OSINT — NO API/login needed"
+    "Social Analyzer — scan 1000+ sites for username, no API needed"
+    "Ignorant       — phone → linked accounts, no API needed"
     "Back"
   )
-  PS3=$'\n  Choose [1-15]: '
+  PS3=$'\n  Choose [1-18]: '
   select opt in "${opts[@]}"; do
     case $REPLY in
       1) _sherlock ;;
@@ -645,7 +687,10 @@ module_people_osint() {
       12) _blackbird ;;
       13) _antisocial ;;
       14) _cupidcrawl ;;
-      15) return ;;
+      15) _hackerwasii ;;
+      16) _social_analyzer ;;
+      17) _ignorant ;;
+      18) return ;;
     esac
     break
   done
@@ -806,6 +851,46 @@ _cupidcrawl() {
   pause
 }
 
+_hackerwasii() {
+  if [[ -d "${TOOLS_DIR}/hackerwasii" ]]; then
+    info "Hackerwasii — no API/login required"
+    info "Targets: France, Switzerland, Luxembourg, Belgium persons"
+    cd "${TOOLS_DIR}/hackerwasii"
+    python3 hackerwasii.py
+  else
+    warn "Hackerwasii not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+_social_analyzer() {
+  if [[ -d "${TOOLS_DIR}/social-analyzer" ]]; then
+    read -rp "  ${C}Username to scan (1000+ sites, no API needed): ${NC}" u
+    info "Running Social Analyzer for: ${u}..."
+    cd "${TOOLS_DIR}/social-analyzer"
+    python3 app.py --username "$u" --metadata --extract --top 500       | tee "${LOGS_DIR}/socialanalyzer_${u}_$(timestamp).txt"
+  else
+    warn "Social Analyzer not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+_ignorant() {
+  if command -v ignorant &>/dev/null || [[ -d "${TOOLS_DIR}/ignorant" ]]; then
+    read -rp "  ${C}Country code (e.g. 33 for France, 1 for US): ${NC}" cc
+    read -rp "  ${C}Phone number (no spaces): ${NC}" num
+    info "Running Ignorant — no API needed..."
+    if [[ -d "${TOOLS_DIR}/ignorant" ]]; then
+      python3 "${TOOLS_DIR}/ignorant/ignorant.py" "$cc" "$num"         | tee "${LOGS_DIR}/ignorant_${num}_$(timestamp).txt"
+    else
+      ignorant "$cc" "$num" | tee "${LOGS_DIR}/ignorant_${num}_$(timestamp).txt"
+    fi
+  else
+    warn "Ignorant not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
 _clatscope() {
   if [[ -d "${TOOLS_DIR}/ClatScope" ]]; then
     info "Starting ClatScope unified OSINT..."
@@ -939,9 +1024,10 @@ module_darkweb_leaks() {
     "Tor onion check    — route through Tor"
     "Paste sites scan   — Pastebin/Hastebin dork"
     "Prying Deep       — dark web crawler for intelligence"
+    "Robin             — AI-powered dark web OSINT (no API needed)"
     "Back"
   )
-  PS3=$'\n  Choose [1-6]: '
+  PS3=$'\n  Choose [1-7]: '
   select opt in "${opts[@]}"; do
     case $REPLY in
       1) _hibp ;;
@@ -949,7 +1035,8 @@ module_darkweb_leaks() {
       3) _tor_check ;;
       4) _paste_dork ;;
       5) _prying_deep ;;
-      6) return ;;
+      6) _robin ;;
+      7) return ;;
     esac
     break
   done
@@ -1029,6 +1116,21 @@ _prying_deep() {
   else
     warn "Prying Deep not installed. Run: osint-ethack install"
     info "Crawls .onion sites and extracts intelligence"
+  fi
+  pause
+}
+
+_robin() {
+  if [[ -d "${TOOLS_DIR}/robin" ]]; then
+    read -rp "  ${C}Search query for dark web investigation: ${NC}" query
+    info "Starting Robin (AI-powered dark web OSINT, requires Tor)..."
+    service tor start 2>/dev/null || tor &
+    sleep 3
+    cd "${TOOLS_DIR}/robin"
+    python3 robin.py --query "$query"       | tee "${LOGS_DIR}/robin_$(timestamp).txt"
+  else
+    warn "Robin not installed. Run: osint-ethack install"
+    info "Combines Tor crawling with LLM analysis to summarize findings"
   fi
   pause
 }
@@ -1311,6 +1413,12 @@ _update_git() {
     "cupidcr4wl"
     "gitleak"
     "DorkEye"
+    "hackerwasii"
+    "social-analyzer"
+    "ignorant"
+    "robin"
+    "Osintgram"
+    "harpoon"
   )
   for repo in "${repos[@]}"; do
     local rpath="${TOOLS_DIR}/${repo}"
@@ -1619,6 +1727,85 @@ _install_dorkeye() {
     ok "DorkEye cloned → ${dest}"
   else
     ok "DorkEye already present."
+  fi
+}
+
+_install_hackerwasii() {
+  local dest="${TOOLS_DIR}/hackerwasii"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Hackerwasii..."
+    git clone --depth=1 https://github.com/HackerWasii/hackerwasii "$dest" 2>/dev/null       || git clone --depth=1 https://github.com/Plitox/Hackerwasii "$dest" 2>/dev/null       || { warn "Hackerwasii — check GitHub for latest URL"; return; }
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "Hackerwasii cloned → ${dest}"
+  else
+    ok "Hackerwasii already present."
+  fi
+}
+
+_install_social_analyzer() {
+  local dest="${TOOLS_DIR}/social-analyzer"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Social Analyzer..."
+    git clone --depth=1 https://github.com/qeeqbox/social-analyzer "$dest"
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "Social Analyzer cloned → ${dest}"
+  else
+    ok "Social Analyzer already present."
+  fi
+}
+
+_install_ignorant() {
+  if ! command -v ignorant &>/dev/null; then
+    pip_install ignorant 2>/dev/null || {
+      local dest="${TOOLS_DIR}/ignorant"
+      git clone --depth=1 https://github.com/megadose/ignorant "$dest"
+      pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    }
+  fi
+  ok "Ignorant ready"
+}
+
+_install_robin() {
+  local dest="${TOOLS_DIR}/robin"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Robin..."
+    git clone --depth=1 https://github.com/apurvsinghgautam/robin "$dest" 2>/dev/null       || { warn "Robin — check GitHub for latest URL"; return; }
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "Robin cloned → ${dest}"
+  else
+    ok "Robin already present."
+  fi
+}
+
+_install_osintgram() {
+  local dest="${TOOLS_DIR}/Osintgram"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Osintgram..."
+    git clone --depth=1 https://github.com/Datalux/Osintgram "$dest"
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "Osintgram cloned → ${dest}"
+  else
+    ok "Osintgram already present."
+  fi
+}
+
+_install_bbot() {
+  if ! command -v bbot &>/dev/null; then
+    info "Installing BBot..."
+    pip_install bbot
+  fi
+  ok "BBot ready"
+}
+
+_install_harpoon() {
+  local dest="${TOOLS_DIR}/harpoon"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Harpoon..."
+    git clone --depth=1 https://github.com/Te-k/harpoon "$dest"
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "Harpoon cloned → ${dest}"
+  else
+    ok "Harpoon already present."
   fi
 }
 
