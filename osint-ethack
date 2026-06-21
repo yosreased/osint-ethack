@@ -31,7 +31,7 @@ TOOLS_DIR="${TOOL_DIR}/tools"
 LOGS_DIR="${TOOL_DIR}/logs"
 WORKDIR="${HOME}/osint-results"
 CONF="${TOOL_DIR}/config.env"
-VERSION="2.4.0"
+VERSION="2.6.0"
 
 # ── Colors ───────────────────────────────────────────────────
 R='\033[0;31m'  G='\033[0;32m'  Y='\033[1;33m'
@@ -217,6 +217,70 @@ _run_crtsh() {
     | sort -u \
     | tee "${2}/crtsh_${1}.txt"
   ok "Done."
+}
+
+_run_gitleak() {
+  if [[ -d "${TOOLS_DIR}/gitleak" ]]; then
+    read -rp "  ${C}GitHub username or org: ${NC}" target
+    info "Running GitLeak for: ${target}..."
+    python3 "${TOOLS_DIR}/gitleak/gitleak.py" -u "$target"       | tee "${2}/gitleak_${target}_$(timestamp).txt"
+  else
+    warn "GitLeak not installed. Run: osint-ethack install"
+    info "Extracts hidden emails, commit timezones, activity patterns from .patch metadata"
+  fi
+  pause
+}
+
+_run_roninrecon() {
+  if command -v ronin-recon &>/dev/null; then
+    info "Running ronin-recon on $1 (subdomains+DNS+ports+TLS+spider)..."
+    ronin-recon run "$1" --output "${2}/roninrecon_${1}.txt" 2>&1 | tee /dev/tty
+  else
+    warn "ronin-recon not installed. Run: osint-ethack install"
+    info "gem install ronin-recon (Ruby-based recursive recon engine)"
+  fi
+  pause
+}
+
+_run_dorkeye() {
+  if [[ -d "${TOOLS_DIR}/DorkEye" ]]; then
+    info "Launching DorkEye interactive wizard for $1..."
+    python3 "${TOOLS_DIR}/DorkEye/dorkeye.py" --target "$1" --wizard       | tee "${2}/dorkeye_${1}_$(timestamp).txt"
+  else
+    warn "DorkEye not installed. Run: osint-ethack install"
+    info "Automated Google Dorking with SQLi detection + secrets scanning"
+  fi
+  pause
+}
+
+_run_twint() {
+  if command -v twint &>/dev/null || pip3 show twint &>/dev/null 2>&1; then
+    info "Twint — Twitter/X OSINT for: $1"
+    echo -e "  ${Y}Select mode:${NC}"
+    echo -e "  1) Search tweets  2) User profile  3) User followers"
+    read -rp "  Choice: " m
+    case $m in
+      1) twint -s "$1" -o "${2}/twint_search.json" --json ;;
+      2) twint -u "$1" -o "${2}/twint_user.json" --json ;;
+      3) twint -u "$1" --followers -o "${2}/twint_followers.json" --json ;;
+    esac | tee "${2}/twint_raw.txt"
+  else
+    warn "Twint not installed. Run: osint-ethack install"
+    info "Scrapes tweets/followers/following without Twitter API"
+  fi
+  pause
+}
+
+_run_gitdorker() {
+  if [[ -d "${TOOLS_DIR}/GitDorker" ]]; then
+    read -rp "  ${C}Search term (e.g. company name, email domain): ${NC}" term
+    info "Running GitDorker for: ${term}..."
+    python3 "${TOOLS_DIR}/GitDorker/GitDorker.py"       -tf "${TOOLS_DIR}/GitDorker/Dorks/alldorksv3"       -q "$term" -p 1       | tee "${2}/gitdorker_${term}_$(timestamp).txt"
+  else
+    warn "GitDorker not installed. Run: osint-ethack install"
+    info "Finds exposed API keys, passwords, tokens on GitHub"
+  fi
+  pause
 }
 
 _run_reconng() {
@@ -558,9 +622,13 @@ module_people_osint() {
     "Leaker         — search 10 breach databases at once"
     "DaProfiler     — full person profiling (social, email, phone)"
     "ClatScope      — unified OSINT: IP/domain/email/phone/username"
+    "Emora          — username search across 500+ social networks"
+    "Blackbird      — username search across 600+ websites"
+    "Antisocial     — find FORGOTTEN accounts (3-tier verify, ~5% false positives)"
+    "Cupidcr4wl     — username/phone search on adult platforms"
     "Back"
   )
-  PS3=$'\n  Choose [1-11]: '
+  PS3=$'\n  Choose [1-15]: '
   select opt in "${opts[@]}"; do
     case $REPLY in
       1) _sherlock ;;
@@ -573,7 +641,11 @@ module_people_osint() {
       8) _leaker ;;
       9) _daprofile ;;
       10) _clatscope ;;
-      11) return ;;
+      11) _emora ;;
+      12) _blackbird ;;
+      13) _antisocial ;;
+      14) _cupidcrawl ;;
+      15) return ;;
     esac
     break
   done
@@ -678,6 +750,58 @@ _daprofile() {
   else
     warn "DaProfiler not installed. Run: osint-ethack install"
     info "Finds: addresses, social accounts, emails, phone numbers"
+  fi
+  pause
+}
+
+_emora() {
+  if [[ -d "${TOOLS_DIR}/Emora" ]]; then
+    read -rp "  ${C}Username to search: ${NC}" u
+    info "Running Emora for: ${u}..."
+    python3 "${TOOLS_DIR}/Emora/emora.py" "$u"       | tee "${LOGS_DIR}/emora_${u}_$(timestamp).txt"
+  else
+    warn "Emora not installed. Run: osint-ethack install"
+    info "Like sherlock but searches 500+ platforms"
+  fi
+  pause
+}
+
+_blackbird() {
+  if [[ -d "${TOOLS_DIR}/blackbird" ]]; then
+    read -rp "  ${C}Username to search across 600+ sites: ${NC}" u
+    info "Running Blackbird for: ${u}..."
+    python3 "${TOOLS_DIR}/blackbird/blackbird.py" -u "$u"       | tee "${LOGS_DIR}/blackbird_${u}_$(timestamp).txt"
+  else
+    warn "Blackbird not installed. Run: osint-ethack install"
+  fi
+  pause
+}
+
+_antisocial() {
+  if [[ -d "${TOOLS_DIR}/antisocial" ]]; then
+    read -rp "  ${C}Username to find FORGOTTEN accounts for: ${NC}" u
+    echo -e "  ${Y}Deep search mode (500+ platforms)? [y/N]: ${NC}"
+    read -r deep
+    info "Running Antisocial for: ${u}..."
+    if [[ "$deep" =~ ^[Yy]$ ]]; then
+      python3 "${TOOLS_DIR}/antisocial/antisocial.py" -u "$u" --deep         | tee "${LOGS_DIR}/antisocial_${u}_$(timestamp).txt"
+    else
+      python3 "${TOOLS_DIR}/antisocial/antisocial.py" -u "$u"         | tee "${LOGS_DIR}/antisocial_${u}_$(timestamp).txt"
+    fi
+  else
+    warn "Antisocial not installed. Run: osint-ethack install"
+    info "3-tier verification: API → browser automation → HTTP analysis"
+  fi
+  pause
+}
+
+_cupidcrawl() {
+  if [[ -d "${TOOLS_DIR}/cupidcr4wl" ]]; then
+    read -rp "  ${C}Username or phone number: ${NC}" target
+    info "Running Cupidcr4wl for: ${target}..."
+    python3 "${TOOLS_DIR}/cupidcr4wl/cupidcr4wl.py" -t "$target"       | tee "${LOGS_DIR}/cupidcrawl_$(timestamp).txt"
+  else
+    warn "Cupidcr4wl not installed. Run: osint-ethack install"
   fi
   pause
 }
@@ -814,16 +938,18 @@ module_darkweb_leaks() {
     "IntelX CLI         — breach & dark web search"
     "Tor onion check    — route through Tor"
     "Paste sites scan   — Pastebin/Hastebin dork"
+    "Prying Deep       — dark web crawler for intelligence"
     "Back"
   )
-  PS3=$'\n  Choose [1-5]: '
+  PS3=$'\n  Choose [1-6]: '
   select opt in "${opts[@]}"; do
     case $REPLY in
       1) _hibp ;;
       2) _intelx ;;
       3) _tor_check ;;
       4) _paste_dork ;;
-      5) return ;;
+      5) _prying_deep ;;
+      6) return ;;
     esac
     break
   done
@@ -889,6 +1015,21 @@ _paste_dork() {
   echo "  \"${term}\" site:pastebin.com OR site:paste.ee"
   echo
   info "Run in browser. For automation: install pastehunter"
+  pause
+}
+
+_prying_deep() {
+  if [[ -d "${TOOLS_DIR}/prying-deep" ]]; then
+    read -rp "  ${C}Search keyword for dark web: ${NC}" keyword
+    info "Starting Prying Deep crawler (requires Tor)..."
+    service tor start 2>/dev/null || tor &
+    sleep 3
+    cd "${TOOLS_DIR}/prying-deep"
+    python3 main.py --keyword "$keyword"       | tee "${LOGS_DIR}/pryingdeep_$(timestamp).txt"
+  else
+    warn "Prying Deep not installed. Run: osint-ethack install"
+    info "Crawls .onion sites and extracts intelligence"
+  fi
   pause
 }
 
@@ -1162,6 +1303,14 @@ _update_git() {
     "xosint"
     "ClatScope"
     "fsociety"
+    "GitDorker"
+    "Emora"
+    "prying-deep"
+    "blackbird"
+    "antisocial"
+    "cupidcr4wl"
+    "gitleak"
+    "DorkEye"
   )
   for repo in "${repos[@]}"; do
     local rpath="${TOOLS_DIR}/${repo}"
@@ -1398,6 +1547,120 @@ _install_sn1per() {
     fi
   else
     ok "Sn1per already installed."
+  fi
+}
+
+_install_blackbird() {
+  local dest="${TOOLS_DIR}/blackbird"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Blackbird..."
+    git clone --depth=1 https://github.com/p1ngul1n0/blackbird "$dest"
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "Blackbird cloned → ${dest}"
+  else
+    ok "Blackbird already present."
+  fi
+}
+
+_install_antisocial() {
+  local dest="${TOOLS_DIR}/antisocial"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Antisocial..."
+    git clone --depth=1 https://github.com/osint-tools/antisocial "$dest" 2>/dev/null       || { warn "Antisocial — check GitHub for latest URL"; return; }
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "Antisocial cloned → ${dest}"
+  else
+    ok "Antisocial already present."
+  fi
+}
+
+_install_cupidcrawl() {
+  local dest="${TOOLS_DIR}/cupidcr4wl"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Cupidcr4wl..."
+    git clone --depth=1 https://github.com/cupidcr4wl/cupidcr4wl "$dest" 2>/dev/null       || { warn "Cupidcr4wl — check GitHub for latest URL"; return; }
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "Cupidcr4wl cloned → ${dest}"
+  else
+    ok "Cupidcr4wl already present."
+  fi
+}
+
+_install_gitleak() {
+  local dest="${TOOLS_DIR}/gitleak"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning GitLeak..."
+    git clone --depth=1 https://github.com/osint-gitleak/gitleak "$dest" 2>/dev/null       || { warn "GitLeak — check GitHub for latest URL"; return; }
+    pip_install requests 2>/dev/null || true
+    ok "GitLeak cloned → ${dest}"
+  else
+    ok "GitLeak already present."
+  fi
+}
+
+_install_roninrecon() {
+  if ! command -v ronin-recon &>/dev/null; then
+    if command -v gem &>/dev/null; then
+      info "Installing ronin-recon via gem..."
+      gem install ronin-recon
+    else
+      warn "Ruby gem not found. Install ruby first: apt install ruby"
+    fi
+  fi
+  ok "ronin-recon ready"
+}
+
+_install_dorkeye() {
+  local dest="${TOOLS_DIR}/DorkEye"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning DorkEye..."
+    git clone --depth=1 https://github.com/JacobJackpot/DorkEye "$dest" 2>/dev/null       || { warn "DorkEye — check GitHub for latest URL"; return; }
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "DorkEye cloned → ${dest}"
+  else
+    ok "DorkEye already present."
+  fi
+}
+
+_install_twint() {
+  info "Installing Twint..."
+  pip_install twint 2>/dev/null || pip_install git+https://github.com/twintproject/twint.git
+  ok "Twint installed"
+}
+
+_install_gitdorker() {
+  local dest="${TOOLS_DIR}/GitDorker"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning GitDorker..."
+    git clone --depth=1 https://github.com/obheda12/GitDorker "$dest"
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "GitDorker cloned → ${dest}"
+  else
+    ok "GitDorker already present."
+  fi
+}
+
+_install_emora() {
+  local dest="${TOOLS_DIR}/Emora"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Emora..."
+    git clone --depth=1 https://github.com/Dheerajmadhukar/Emora "$dest" 2>/dev/null       || git clone --depth=1 https://github.com/emora-search/Emora "$dest" 2>/dev/null       || { warn "Emora — check GitHub for latest URL"; return; }
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "Emora cloned → ${dest}"
+  else
+    ok "Emora already present."
+  fi
+}
+
+_install_pryingdeep() {
+  local dest="${TOOLS_DIR}/prying-deep"
+  if [[ ! -d "$dest" ]]; then
+    info "Cloning Prying Deep..."
+    git clone --depth=1 https://github.com/iustin24/prying-deep "$dest" 2>/dev/null       || { warn "Prying Deep — check GitHub for latest URL"; return; }
+    pip_install -r "${dest}/requirements.txt" 2>/dev/null || true
+    ok "Prying Deep cloned → ${dest}"
+  else
+    ok "Prying Deep already present."
   fi
 }
 

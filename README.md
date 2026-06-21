@@ -98,6 +98,12 @@ HIBP_API_KEY=""       # haveibeenpwned.com — paid
 
 ## CHANGELOG
 
+### v2.6.0
+- 🕵️ People OSINT: added Blackbird (600+ sites), Antisocial (forgotten accounts, 3-tier verify), Cupidcr4wl
+- 🔍 Passive Recon: added GitLeak (GitHub commit metadata), ronin-recon (recursive recon framework), DorkEye (AI-powered Google Dorking)
+- 📦 Installer: v2.6 tool group added
+- 🔄 Updater: covers all new tools automatically
+
 ### v2.5.0
 - 🐦 Passive Recon: added Twint (Twitter/X scraping, no API needed) and GitDorker (GitHub secret exposure)
 - 👤 People OSINT: added Emora (username search across 500+ platforms)
